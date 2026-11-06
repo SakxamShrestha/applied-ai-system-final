@@ -1,0 +1,104 @@
+{
+  "description": "Golden set for the agentic recommender. Each case states the behaviour the system must show, not just the songs it returns. JSON is used instead of YAML so the harness runs with no extra install.",
+  "cases": [
+    {
+      "name": "easy_genre_and_energy",
+      "query": "high energy hip hop to hype me up",
+      "expect_status": "accepted",
+      "max_revisions": 0,
+      "min_confidence": 0.7,
+      "top_genre": "hip-hop",
+      "min_results": 5
+    },
+    {
+      "name": "study_lofi",
+      "query": "chill lofi for studying",
+      "expect_status": "accepted",
+      "max_revisions": 0,
+      "min_confidence": 0.8,
+      "top_genre": "lofi"
+    },
+    {
+      "name": "over_constrained_self_corrects",
+      "query": "chill acoustic 90s stuff for studying, nothing too poppy",
+      "expect_status": "best_effort",
+      "min_revisions": 1,
+      "forbidden_genres": [
+        "pop"
+      ],
+      "message_contains": "given up"
+    },
+    {
+      "name": "instrumental_filter_survives_revision",
+      "query": "1990s instrumental hip-hop",
+      "expect_status": "best_effort",
+      "min_revisions": 1,
+      "field_at_least": {
+        "instrumentalness": 0.5
+      },
+      "surrendered_contains": "genre = hip-hop"
+    },
+    {
+      "name": "obscure_instrumental_coding",
+      "query": "obscure instrumental music for coding",
+      "expect_status": "accepted",
+      "field_at_least": {
+        "instrumentalness": 0.5
+      },
+      "field_at_most": {
+        "popularity": 70
+      }
+    },
+    {
+      "name": "decade_and_genre",
+      "query": "moody 1990s jazz",
+      "expect_status": "best_effort",
+      "top_genre": "jazz",
+      "min_confidence": 0.5,
+      "min_revisions": 1,
+      "surrendered_contains": "mood = moody"
+    },
+    {
+      "name": "mood_only",
+      "query": "romantic music",
+      "expect_status": "accepted",
+      "min_confidence": 0.5
+    },
+    {
+      "name": "veto_is_honoured",
+      "query": "upbeat music, nothing too poppy",
+      "expect_status": "accepted",
+      "forbidden_genres": [
+        "pop"
+      ]
+    },
+    {
+      "name": "contradictory_filters_are_infeasible",
+      "query": "instrumental lyrical music",
+      "expect_status": "infeasible",
+      "max_results": 0,
+      "message_contains": "Closest available"
+    },
+    {
+      "name": "empty_query_rejected",
+      "query": "   ",
+      "expect_status": "rejected",
+      "max_results": 0,
+      "message_contains": "empty"
+    },
+    {
+      "name": "gibberish_rejected",
+      "query": "asdfghjkl qwerty",
+      "expect_status": "rejected",
+      "max_results": 0,
+      "message_contains": "recognise"
+    },
+    {
+      "name": "overlong_query_rejected",
+      "query": "chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi ",
+      "expect_status": "rejected",
+      "max_results": 0,
+      "message_contains": "too long"
+    }
+  ]
+}

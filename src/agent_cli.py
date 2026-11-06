@@ -9,6 +9,8 @@ import argparse
 import sys
 from typing import List, Sequence
 
+from src.agent.hints import make_enricher
+from src.agent.knowledge import build_index
 from src.agent.loop import DEFAULT_K, run_agent
 from src.agent.trace import append_trace, render_trace
 from src.agent.types import (
@@ -54,6 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--trace", action="store_true", help="print the full reasoning trace")
     parser.add_argument(
+        "--no-rag",
+        action="store_true",
+        help="skip knowledge retrieval, so only the query itself shapes the plan",
+    )
+    parser.add_argument(
         "--no-log", action="store_true", help="do not append this run to logs/agent_traces.md"
     )
     return parser
@@ -69,6 +76,9 @@ def render_result(result: AgentResult, show_trace: bool) -> str:
     ]
     if result.plan is not None and result.recommendations:
         lines.append(f"Final plan: {result.plan.describe_prefs()} | mode {result.plan.mode}")
+        retrieved = [note for note in result.plan.notes if note.startswith("knowledge: retrieved")]
+        for note in retrieved:
+            lines.append(f"Retrieved: {note[len('knowledge: retrieved '):]}")
     if result.recommendations:
         lines.extend(["", format_table(list(result.recommendations))])
     if show_trace:
@@ -87,7 +97,8 @@ def main(argv: Sequence[str] = None) -> int:
         print("Error: --top must be at least 1.", file=sys.stderr)
         return EXIT_REJECTED
 
-    result = run_agent(args.query, songs, k=args.top, mode=args.mode)
+    enrich = None if args.no_rag else make_enricher(build_index(songs))
+    result = run_agent(args.query, songs, k=args.top, mode=args.mode, enrich=enrich)
     print(render_result(result, show_trace=args.trace))
     if not args.no_log:
         log_path = append_trace(result)

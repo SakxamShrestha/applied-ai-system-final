@@ -56,3 +56,18 @@ def test_cli_trace_flag_prints_the_reasoning_trace(capsys):
 def test_cli_mode_flag_is_validated():
     with pytest.raises(SystemExit):
         build_parser().parse_args(["chill lofi", "--mode", "not_a_mode"])
+
+
+def test_retrieval_changes_the_ranking_for_a_situational_query(capsys):
+    main(["something for deep focus while coding", "--no-rag", "--no-log", "-k", "3"])
+    without_rag = capsys.readouterr().out
+
+    main(["something for deep focus while coding", "--no-log", "-k", "3"])
+    with_rag = capsys.readouterr().out
+
+    # Without the corpus the top pick is a vocal acoustic track, which is wrong for
+    # focus listening; retrieval pushes the instrumental tracks up.
+    assert "Porch Light Letters" in without_rag
+    assert "Porch Light Letters" not in with_rag
+    assert "Instrumentalness proximity" in with_rag
+    assert "Retrieved:" in with_rag and "Retrieved:" not in without_rag
