@@ -1,0 +1,99 @@
+"""Command line entry point for the agentic recommender.
+
+Run from the project root:
+    python -m src.agent_cli "chill lofi for studying"
+    python -m src.agent_cli "1990s instrumental hip-hop" --trace
+"""
+
+import argparse
+import sys
+from typing import List, Sequence
+
+from src.agent.loop import DEFAULT_K, run_agent
+from src.agent.trace import append_trace, render_trace
+from src.agent.types import (
+    STATUS_ACCEPTED,
+    STATUS_BEST_EFFORT,
+    STATUS_INFEASIBLE,
+    STATUS_REJECTED,
+    AgentResult,
+)
+from src.main import SONGS_CSV, format_table
+from src.recommender import WEIGHT_STRATEGIES, load_songs
+
+EXIT_OK = 0
+EXIT_LOAD_ERROR = 1
+EXIT_REJECTED = 2
+EXIT_INFEASIBLE = 3
+
+STATUS_LABELS = {
+    STATUS_ACCEPTED: "ACCEPTED",
+    STATUS_BEST_EFFORT: "BEST EFFORT",
+    STATUS_INFEASIBLE: "INFEASIBLE",
+    STATUS_REJECTED: "REJECTED",
+}
+EXIT_CODES = {
+    STATUS_ACCEPTED: EXIT_OK,
+    STATUS_BEST_EFFORT: EXIT_OK,
+    STATUS_INFEASIBLE: EXIT_INFEASIBLE,
+    STATUS_REJECTED: EXIT_REJECTED,
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m src.agent_cli",
+        description="Ask for music in plain English; the agent plans, checks and revises.",
+    )
+    parser.add_argument("query", nargs="?", default="", help="what you want to listen to")
+    parser.add_argument("-k", "--top", type=int, default=DEFAULT_K, help="how many songs to return")
+    parser.add_argument(
+        "--mode",
+        choices=sorted(WEIGHT_STRATEGIES),
+        help="force a ranking mode instead of letting the planner choose",
+    )
+    parser.add_argument("--trace", action="store_true", help="print the full reasoning trace")
+    parser.add_argument(
+        "--no-log", action="store_true", help="do not append this run to logs/agent_traces.md"
+    )
+    return parser
+
+
+def render_result(result: AgentResult, show_trace: bool) -> str:
+    label = STATUS_LABELS.get(result.status, result.status.upper())
+    lines: List[str] = [
+        f'Query: "{result.query}"',
+        f"Status: {label} | confidence {result.confidence:.2f} | "
+        f"{result.revisions} revision(s) | {len(result.passes)} pass(es)",
+        f"Agent: {result.message}",
+    ]
+    if result.plan is not None and result.recommendations:
+        lines.append(f"Final plan: {result.plan.describe_prefs()} | mode {result.plan.mode}")
+    if result.recommendations:
+        lines.extend(["", format_table(list(result.recommendations))])
+    if show_trace:
+        lines.extend(["", render_trace(result)])
+    return "\n".join(lines)
+
+
+def main(argv: Sequence[str] = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        songs = load_songs(str(SONGS_CSV))
+    except (FileNotFoundError, ValueError) as error:
+        print(f"Error: could not load songs. {error}", file=sys.stderr)
+        return EXIT_LOAD_ERROR
+    if args.top < 1:
+        print("Error: --top must be at least 1.", file=sys.stderr)
+        return EXIT_REJECTED
+
+    result = run_agent(args.query, songs, k=args.top, mode=args.mode)
+    print(render_result(result, show_trace=args.trace))
+    if not args.no_log:
+        log_path = append_trace(result)
+        print(f"\nTrace appended to {log_path.relative_to(log_path.parents[1])}")
+    return EXIT_CODES.get(result.status, EXIT_OK)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

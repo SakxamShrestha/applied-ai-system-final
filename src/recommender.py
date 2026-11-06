@@ -24,6 +24,8 @@ PROXIMITY_FEATURES = {
     "energy": "Energy proximity",
     "danceability": "Danceability proximity",
     "acousticness": "Acousticness proximity",
+    "instrumentalness": "Instrumentalness proximity",
+    "speechiness": "Speechiness proximity",
 }
 
 # Strategy Pattern: each mode is a weight table; score_song stays the same.
@@ -38,6 +40,8 @@ WEIGHT_STRATEGIES = {
         "acousticness": 1.0,
         "tempo_bpm": 0.5,
         "popularity": 0.5,
+        "instrumentalness": 1.0,
+        "speechiness": 0.5,
     },
     "genre_first": {
         "genre": 4.0,
@@ -49,6 +53,8 @@ WEIGHT_STRATEGIES = {
         "acousticness": 0.5,
         "tempo_bpm": 0.25,
         "popularity": 0.25,
+        "instrumentalness": 0.5,
+        "speechiness": 0.25,
     },
     "vibe_and_energy": {
         "genre": 0.75,
@@ -60,6 +66,8 @@ WEIGHT_STRATEGIES = {
         "acousticness": 1.0,
         "tempo_bpm": 0.75,
         "popularity": 0.25,
+        "instrumentalness": 1.5,
+        "speechiness": 0.5,
     },
 }
 DEFAULT_MODE = "balanced"
