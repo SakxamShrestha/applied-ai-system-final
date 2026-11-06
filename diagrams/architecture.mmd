@@ -1,0 +1,44 @@
+%% Agentic Music Recommender — system architecture
+%% Mermaid source of record. Render with https://mermaid.live or any Mermaid viewer.
+%% Every node maps to a real module; file paths are given in the node labels.
+flowchart TD
+    Q["Free-text query<br/>src/agent_cli.py · src/app.py"] --> V["validate_query()<br/>src/agent/query_parser.py<br/>guardrail: empty · over 300 chars · unknown vocabulary"]
+    V -->|rejected, exit 2| ERR["Explained refusal + example queries"]
+    V -->|accepted| P
+
+    subgraph AGENT["Agent loop — src/agent/loop.py, max 3 counted revisions, 6 turns"]
+        P["PLAN<br/>parse_query() + retrieved hints<br/>QueryPlan: soft prefs · hard filters · requirements · mode"]
+        P --> F["FILTER<br/>apply_filters()<br/>src/agent/constraints.py"]
+        F -->|"0 survivors"| INF["INFEASIBLE, exit 3<br/>names the blocking filter<br/>+ nearest misses"]
+        F -->|"survivors"| A["ACT<br/>recommend_songs()<br/>src/recommender.py (unchanged)<br/>weighted score + diversity re-rank"]
+        A --> C["CRITIC<br/>src/agent/critic.py<br/>requirements · zero-match · veto leakage<br/>· artist spread · confidence"]
+        C -->|"all checks pass"| OUT
+        C -->|"a check failed"| R["REVISE<br/>src/agent/planner.py<br/>cheapest concession first;<br/>vetoes never conceded"]
+        R -->|"ranking unchanged -> switch mode instead"| F
+        C -->|"concessions spent"| OUT
+    end
+
+    subgraph RAG["Knowledge retrieval — src/agent/knowledge.py (pure-Python TF-IDF)"]
+        K1["knowledge/use_cases.md"] --> IDX["KnowledgeIndex<br/>markdown sections + catalog summaries"]
+        K2["knowledge/genres.md"] --> IDX
+        K3["knowledge/moods.md"] --> IDX
+        K4["data/songs.csv<br/>per-genre coverage facts"] --> IDX
+    end
+    Q --> IDX
+    IDX -->|"hint directives -> soft targets only<br/>src/agent/hints.py"| P
+
+    OUT["AgentResult<br/>status · top-k · reasons · confidence · passes"] --> VOICE["EXPLAIN<br/>src/agent/voices.py<br/>plain | dj | critic"]
+    VOICE --> UI["ASCII table (CLI)<br/>dataframe (Streamlit)"]
+    INF --> UI
+    ERR --> UI
+
+    AGENT -.->|"every pass"| TR["src/agent/trace.py<br/>logs/agent_traces.md"]
+
+    subgraph EVAL["Checking — automated and human"]
+        GS["eval/golden_queries.json<br/>12 cases, expected behaviour"] --> H["eval/run_eval.py<br/>pass/fail · mean confidence"]
+        H --> REP["logs/eval_run.txt<br/>pasted into README.md"]
+        TESTS["tests/ — 129 pytest cases"] --> REP
+        HUM["Human review table<br/>model_card.md"] --> REP
+    end
+    OUT -.-> H
+    TR -.-> HUM

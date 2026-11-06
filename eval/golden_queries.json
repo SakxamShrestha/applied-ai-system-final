@@ -8,7 +8,8 @@
       "max_revisions": 0,
       "min_confidence": 0.7,
       "top_genre": "hip-hop",
-      "min_results": 5
+      "min_results": 5,
+      "use_rag": false
     },
     {
       "name": "study_lofi",
@@ -16,7 +17,8 @@
       "expect_status": "accepted",
       "max_revisions": 0,
       "min_confidence": 0.8,
-      "top_genre": "lofi"
+      "top_genre": "lofi",
+      "use_rag": false
     },
     {
       "name": "over_constrained_self_corrects",
@@ -26,7 +28,8 @@
       "forbidden_genres": [
         "pop"
       ],
-      "message_contains": "given up"
+      "message_contains": "given up",
+      "use_rag": false
     },
     {
       "name": "instrumental_filter_survives_revision",
@@ -36,7 +39,8 @@
       "field_at_least": {
         "instrumentalness": 0.5
       },
-      "surrendered_contains": "genre = hip-hop"
+      "surrendered_contains": "genre = hip-hop",
+      "use_rag": false
     },
     {
       "name": "obscure_instrumental_coding",
@@ -47,7 +51,8 @@
       },
       "field_at_most": {
         "popularity": 70
-      }
+      },
+      "use_rag": false
     },
     {
       "name": "decade_and_genre",
@@ -56,13 +61,15 @@
       "top_genre": "jazz",
       "min_confidence": 0.5,
       "min_revisions": 1,
-      "surrendered_contains": "mood = moody"
+      "surrendered_contains": "mood = moody",
+      "use_rag": false
     },
     {
       "name": "mood_only",
       "query": "romantic music",
       "expect_status": "accepted",
-      "min_confidence": 0.5
+      "min_confidence": 0.5,
+      "use_rag": false
     },
     {
       "name": "veto_is_honoured",
@@ -70,35 +77,79 @@
       "expect_status": "accepted",
       "forbidden_genres": [
         "pop"
-      ]
+      ],
+      "use_rag": false
     },
     {
       "name": "contradictory_filters_are_infeasible",
       "query": "instrumental lyrical music",
       "expect_status": "infeasible",
       "max_results": 0,
-      "message_contains": "Closest available"
+      "message_contains": "Closest available",
+      "use_rag": false
     },
     {
       "name": "empty_query_rejected",
       "query": "   ",
       "expect_status": "rejected",
       "max_results": 0,
-      "message_contains": "empty"
+      "message_contains": "empty",
+      "use_rag": false
     },
     {
       "name": "gibberish_rejected",
       "query": "asdfghjkl qwerty",
       "expect_status": "rejected",
       "max_results": 0,
-      "message_contains": "recognise"
+      "message_contains": "recognise",
+      "use_rag": false
     },
     {
       "name": "overlong_query_rejected",
       "query": "chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi chill lofi ",
       "expect_status": "rejected",
       "max_results": 0,
-      "message_contains": "too long"
+      "message_contains": "too long",
+      "use_rag": false
+    },
+    {
+      "name": "rag_focus_prefers_instrumental",
+      "query": "something for deep focus while coding",
+      "use_rag": true,
+      "expect_status": "accepted",
+      "field_at_least": {
+        "instrumentalness": 0.5
+      },
+      "min_confidence": 0.9,
+      "max_revisions": 0
+    },
+    {
+      "name": "no_rag_focus_admits_a_vocal_track",
+      "query": "something for deep focus while coding",
+      "use_rag": false,
+      "expect_status": "accepted",
+      "top_genre": "acoustic"
+    },
+    {
+      "name": "rag_gym_query_targets_high_energy",
+      "query": "gym workout hype",
+      "use_rag": true,
+      "expect_status": "accepted",
+      "field_at_least": {
+        "energy": 0.6
+      },
+      "min_confidence": 0.7
+    },
+    {
+      "name": "rag_over_constrained_still_self_corrects",
+      "query": "chill acoustic 90s stuff for studying, nothing too poppy",
+      "use_rag": true,
+      "expect_status": "best_effort",
+      "min_revisions": 1,
+      "forbidden_genres": [
+        "pop"
+      ],
+      "surrendered_contains": "mood = chill"
     }
   ]
 }

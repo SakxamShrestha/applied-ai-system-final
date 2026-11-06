@@ -24,6 +24,12 @@ def test_golden_set_covers_every_status(catalog):
     assert statuses == {"accepted", "best_effort", "infeasible", "rejected"}
 
 
+def test_golden_set_exercises_both_retrieval_paths(catalog):
+    flags = {case.get("use_rag", True) for case in load_cases(DEFAULT_CASES)}
+
+    assert flags == {True, False}
+
+
 def test_evaluate_case_reports_a_failing_expectation(catalog):
     case = {"name": "deliberately wrong", "query": "chill lofi", "expect_status": "rejected"}
 
@@ -57,4 +63,6 @@ def test_main_exits_zero_on_the_committed_golden_set(capsys):
     code = main([])
 
     assert code == 0
-    assert "12/12 cases passed" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "cases passed" in output
+    assert "FAIL" not in output

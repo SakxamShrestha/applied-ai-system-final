@@ -1,0 +1,286 @@
+$ python -m src.agent_cli "high energy hip hop to hype me up" -k 5
+Query: "high energy hip hop to hype me up"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: energy=0.9, danceability=0.85, tempo_bpm=150.0, acousticness=0.6, genre=hip-hop | mode vibe_and_energy
+Retrieved: 'Workouts, gym sessions and hype' (use_cases.md, similarity 0.10) -> energy=0.9, danceability=0.85, tempo_bpm=150.0, mode=vibe_and_energy
+Retrieved: 'Chill, relaxed and calm' (moods.md, similarity 0.07) -> acousticness=0.6
+
++------+----------------+---------------+-----------+-------+--------------------------------------+
+| Rank | Song Title     | Artist        | Genre     | Score | Reasons                              |
++======+================+===============+===========+=======+======================================+
+|    1 | Concrete Crown | Blockline     | hip-hop   |  5.70 | Genre match: hip-hop (+0.75)         |
+|      |                |               |           |       | Energy proximity: 0.88 (+2.64)       |
+|      |                |               |           |       | Danceability proximity: 1.00 (+1.5)  |
+|      |                |               |           |       | Acousticness proximity: 0.48 (+0.48) |
+|      |                |               |           |       | Tempo proximity: 0.44 (+0.33)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+|    2 | Gym Hero       | Max Pulse     | pop       |  5.43 | Energy proximity: 0.97 (+2.91)       |
+|      |                |               |           |       | Danceability proximity: 0.97 (+1.46) |
+|      |                |               |           |       | Acousticness proximity: 0.45 (+0.45) |
+|      |                |               |           |       | Tempo proximity: 0.82 (+0.61)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+|    3 | Storm Runner   | Voltline      | rock      |  5.42 | Energy proximity: 0.99 (+2.97)       |
+|      |                |               |           |       | Danceability proximity: 0.81 (+1.22) |
+|      |                |               |           |       | Acousticness proximity: 0.50 (+0.5)  |
+|      |                |               |           |       | Tempo proximity: 0.98 (+0.73)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+|    4 | Drop Zone      | Kilowatt Kids | edm       |  5.37 | Energy proximity: 0.93 (+2.79)       |
+|      |                |               |           |       | Danceability proximity: 0.99 (+1.48) |
+|      |                |               |           |       | Acousticness proximity: 0.42 (+0.42) |
+|      |                |               |           |       | Tempo proximity: 0.90 (+0.68)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+|    5 | Rooftop Lights | Indigo Parade | indie pop |  5.34 | Energy proximity: 0.86 (+2.58)       |
+|      |                |               |           |       | Danceability proximity: 0.97 (+1.46) |
+|      |                |               |           |       | Acousticness proximity: 0.75 (+0.75) |
+|      |                |               |           |       | Tempo proximity: 0.74 (+0.55)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+
+Why these (plain voice):
+  1. Concrete Crown: it is the hip-hop you asked for, the energy is close to your target, it is about as danceable as you wanted, the acoustic balance fits and the tempo is near your target.
+  2. Gym Hero: the energy is close to your target, it is about as danceable as you wanted, the acoustic balance fits and the tempo is near your target.
+  3. Storm Runner: the energy is close to your target, it is about as danceable as you wanted, the acoustic balance fits and the tempo is near your target.
+  4. Drop Zone: the energy is close to your target, it is about as danceable as you wanted, the acoustic balance fits and the tempo is near your target.
+  5. Rooftop Lights: the energy is close to your target, it is about as danceable as you wanted, the acoustic balance fits and the tempo is near your target.
+
+Trace appended to logs/agent_traces.md
+[exit code: 0]
+
+------------------------------------------------------------------------
+
+$ python -m src.agent_cli "chill acoustic 90s stuff for studying, nothing too poppy" --trace
+Query: "chill acoustic 90s stuff for studying, nothing too poppy"
+Status: BEST EFFORT | confidence 0.85 | 1 revision(s) | 5 pass(es)
+Agent: Best effort: the catalog has nothing matching mood = chill, release decade = 1990s, so that part of the request was given up. Everything else still holds.
+Final plan: acousticness=0.7, instrumentalness=0.1, genre=acoustic, energy=0.3 | mode genre_first
+Retrieved: 'acoustic in this catalog' (data/songs.csv, similarity 0.18) -> no usable hints
+Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.12) -> acousticness=0.7, instrumentalness=0.1
+
++------+---------------------+---------------+----------+-------+------------------------------------------+
+| Rank | Song Title          | Artist        | Genre    | Score | Reasons                                  |
++======+=====================+===============+==========+=======+==========================================+
+|    1 | Porch Light Letters | Willow & Pine | acoustic |  5.87 | Genre match: acoustic (+4.0)             |
+|      |                     |               |          |       | Energy proximity: 1.00 (+1.0)            |
+|      |                     |               |          |       | Acousticness proximity: 0.76 (+0.38)     |
+|      |                     |               |          |       | Instrumentalness proximity: 0.98 (+0.49) |
++------+---------------------+---------------+----------+-------+------------------------------------------+
+|    2 | Slow Burn Text      | Jade Monroe   | r&b      |  1.62 | Energy proximity: 0.82 (+0.82)           |
+|      |                     |               |          |       | Acousticness proximity: 0.70 (+0.35)     |
+|      |                     |               |          |       | Instrumentalness proximity: 0.91 (+0.46) |
++------+---------------------+---------------+----------+-------+------------------------------------------+
+|    3 | Velvet Hours        | Amara Lane    | r&b      |  1.56 | Energy proximity: 0.78 (+0.78)           |
+|      |                     |               |          |       | Acousticness proximity: 0.64 (+0.32)     |
+|      |                     |               |          |       | Instrumentalness proximity: 0.92 (+0.46) |
++------+---------------------+---------------+----------+-------+------------------------------------------+
+|    4 | Coffee Shop Stories | Slow Stereo   | jazz     |  1.53 | Energy proximity: 0.93 (+0.93)           |
+|      |                     |               |          |       | Acousticness proximity: 0.81 (+0.4)      |
+|      |                     |               |          |       | Instrumentalness proximity: 0.40 (+0.2)  |
++------+---------------------+---------------+----------+-------+------------------------------------------+
+|    5 | Midnight Coding     | LoRoom        | lofi     |  1.48 | Energy proximity: 0.88 (+0.88)           |
+|      |                     |               |          |       | Acousticness proximity: 0.99 (+0.49)     |
+|      |                     |               |          |       | Instrumentalness proximity: 0.22 (+0.11) |
++------+---------------------+---------------+----------+-------+------------------------------------------+
+
+Why these (plain voice):
+  1. Porch Light Letters: it is the acoustic you asked for, the energy is close to your target, the acoustic balance fits and there is little or no singing.
+  2. Slow Burn Text: the energy is close to your target, the acoustic balance fits and there is little or no singing.
+  3. Velvet Hours: the energy is close to your target, the acoustic balance fits and there is little or no singing.
+  4. Coffee Shop Stories: the energy is close to your target, the acoustic balance fits and there is little or no singing.
+  5. Midnight Coding: the energy is close to your target, the acoustic balance fits and there is little or no singing.
+
+## Query: "chill acoustic 90s stuff for studying, nothing too poppy"
+
+- Recorded: 2026-11-06 01:25:19Z
+- Status: **best_effort** (confidence 0.85, 1 revision(s))
+- Outcome: Best effort: the catalog has nothing matching mood = chill, release decade = 1990s, so that part of the request was given up. Everything else still holds.
+- Surrendered: mood = chill, release decade = 1990s
+
+### Reasoning trace
+
+- **Pass 1** — mode `vibe_and_energy`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, release_decade=1990s, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill; release decade = 1990s
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - CRITIC: 5/7 checks passed, confidence 0.67
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'; top pick has release_decade='2000s', wanted '1990s'
+    - ACTION: revise: relaxed release decade = 1990s
+- **Pass 2** — mode `vibe_and_energy`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: switched ranking mode to balanced
+- **Pass 3** — mode `balanced`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill
+    - ACT: Porch Light Letters (5.24), Midnight Coding (4.03), Library Rain (3.94), Spacewalk Thoughts (3.90), Slow Burn Text (2.84)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: switched ranking mode to genre_first
+- **Pass 4** — mode `genre_first`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill
+    - ACT: Porch Light Letters (5.87), Midnight Coding (2.48), Library Rain (2.46), Spacewalk Thoughts (2.44), Slow Burn Text (1.62)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: relaxed mood = chill
+- **Pass 5** — mode `genre_first`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic
+    - ACT: Porch Light Letters (5.87), Slow Burn Text (1.62), Velvet Hours (1.56), Coffee Shop Stories (1.53), Midnight Coding (1.48)
+    - CRITIC: 5/5 checks passed, confidence 0.85
+    - ACTION: accept
+
+
+Trace appended to logs/agent_traces.md
+[exit code: 0]
+
+------------------------------------------------------------------------
+
+$ python -m src.agent_cli "1990s instrumental hip-hop" --voice critic
+Query: "1990s instrumental hip-hop"
+Status: BEST EFFORT | confidence 0.52 | 1 revision(s) | 2 pass(es)
+Agent: Best effort: the catalog has nothing matching genre = hip-hop, so that part of the request was given up. Everything else still holds.
+Final plan: speechiness=0.25, danceability=0.8, release_decade=1990s | mode genre_first
+Retrieved: 'hip-hop in this catalog' (data/songs.csv, similarity 0.49) -> no usable hints
+Retrieved: 'Hip-hop and rap' (genres.md, similarity 0.37) -> speechiness=0.25, danceability=0.8
+
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+| Rank | Song Title          | Artist        | Genre     | Score | Reasons                              |
++======+=====================+===============+===========+=======+======================================+
+|    1 | Coffee Shop Stories | Slow Stereo   | jazz      |  1.07 | Decade match: 1990s (+0.5)           |
+|      |                     |               |           |       | Danceability proximity: 0.74 (+0.37) |
+|      |                     |               |           |       | Speechiness proximity: 0.79 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+|    2 | Drop Zone           | Kilowatt Kids | edm       |  0.67 | Danceability proximity: 0.94 (+0.47) |
+|      |                     |               |           |       | Speechiness proximity: 0.81 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+|    3 | Night Drive Loop    | Neon Echo     | synthwave |  0.66 | Danceability proximity: 0.93 (+0.46) |
+|      |                     |               |           |       | Speechiness proximity: 0.79 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+|    4 | Midnight Coding     | LoRoom        | lofi      |  0.60 | Danceability proximity: 0.82 (+0.41) |
+|      |                     |               |           |       | Speechiness proximity: 0.78 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+|    5 | Blue Note Taxi      | The Late Set  | jazz      |  0.60 | Danceability proximity: 0.82 (+0.41) |
+|      |                     |               |           |       | Speechiness proximity: 0.78 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+
+Why these (critic voice):
+  1. Coffee Shop Stories (Slow Stereo) — the clearest fit in the catalog; released 1990s, danceability 0.54, speechiness 0.04; score 1.07 (moderate).
+  2. Drop Zone (Kilowatt Kids) — a defensible second choice; danceability 0.86, speechiness 0.06; score 0.67 (moderate).
+  3. Night Drive Loop (Neon Echo) — reasonable, with caveats; danceability 0.73, speechiness 0.04; score 0.66 (moderate).
+  4. Midnight Coding (LoRoom) — a weaker fit kept for variety; danceability 0.62, speechiness 0.03; score 0.60 (moderate).
+  5. Blue Note Taxi (The Late Set) — included mainly to avoid repeating artists; danceability 0.62, speechiness 0.03; score 0.60 (moderate).
+
+Trace appended to logs/agent_traces.md
+[exit code: 0]
+
+------------------------------------------------------------------------
+
+$ python -m src.agent_cli "instrumental lyrical music"
+Query: "instrumental lyrical music"
+Status: INFEASIBLE | confidence 0.00 | 0 revision(s) | 0 pass(es)
+Agent: No song in the catalog satisfies every hard requirement: speechiness at least 0.1 (removes 17 of 20); instrumentalness at least 0.5 (removes 12 of 20). Closest available: Blue Note Taxi (jazz, fails speechiness at least 0.1); Coffee Shop Stories (jazz, fails speechiness at least 0.1). Relax one of those requirements and ask again.
+
+Trace appended to logs/agent_traces.md
+[exit code: 3]
+
+------------------------------------------------------------------------
+
+$ python -m src.agent_cli ""
+Query: ""
+Status: REJECTED | confidence 0.00 | 0 revision(s) | 0 pass(es)
+Agent: Query was empty. Describe the music you want.
+Try something like:
+  - chill lofi for studying
+  - high energy hip hop to hype me up
+  - moody 1990s jazz, nothing too poppy
+
+Trace appended to logs/agent_traces.md
+[exit code: 2]
+
+------------------------------------------------------------------------
+
+$ python -m src.agent_cli "asdfghjkl qwerty"
+Query: "asdfghjkl qwerty"
+Status: REJECTED | confidence 0.00 | 0 revision(s) | 0 pass(es)
+Agent: Could not recognise any genre, mood, decade or listening situation in that query.
+Try something like:
+  - chill lofi for studying
+  - high energy hip hop to hype me up
+  - moody 1990s jazz, nothing too poppy
+
+Trace appended to logs/agent_traces.md
+[exit code: 2]
+
+------------------------------------------------------------------------
+
+$ python -m src.agent_cli "something for deep focus while coding" --no-rag -k 3
+Query: "something for deep focus while coding"
+Status: ACCEPTED | confidence 0.80 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: energy=0.3 | mode vibe_and_energy
+
++------+---------------------+----------------+----------+-------+--------------------------------+
+| Rank | Song Title          | Artist         | Genre    | Score | Reasons                        |
++======+=====================+================+==========+=======+================================+
+|    1 | Porch Light Letters | Willow & Pine  | acoustic |  3.00 | Energy proximity: 1.00 (+3.0)  |
++------+---------------------+----------------+----------+-------+--------------------------------+
+|    2 | Spacewalk Thoughts  | Orbit Bloom    | ambient  |  2.94 | Energy proximity: 0.98 (+2.94) |
++------+---------------------+----------------+----------+-------+--------------------------------+
+|    3 | Library Rain        | Paper Lanterns | lofi     |  2.85 | Energy proximity: 0.95 (+2.85) |
++------+---------------------+----------------+----------+-------+--------------------------------+
+
+Why these (plain voice):
+  1. Porch Light Letters: the energy is close to your target.
+  2. Spacewalk Thoughts: the energy is close to your target.
+  3. Library Rain: the energy is close to your target.
+
+Trace appended to logs/agent_traces.md
+[exit code: 0]
+
+------------------------------------------------------------------------
+
+$ python -m src.agent_cli "something for deep focus while coding" -k 3
+Query: "something for deep focus while coding"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: instrumentalness=0.95, speechiness=0.0, energy=0.3, acousticness=0.7 | mode vibe_and_energy
+Retrieved: 'Deep focus, studying and coding' (use_cases.md, similarity 0.32) -> instrumentalness=0.95, speechiness=0.0, energy=0.3, mode=vibe_and_energy
+Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.11) -> acousticness=0.7
+
++------+--------------------+----------------+---------+-------+------------------------------------------+
+| Rank | Song Title         | Artist         | Genre   | Score | Reasons                                  |
++======+====================+================+=========+=======+==========================================+
+|    1 | Spacewalk Thoughts | Orbit Bloom    | ambient |  5.71 | Energy proximity: 0.98 (+2.94)           |
+|      |                    |                |         |       | Acousticness proximity: 0.78 (+0.78)     |
+|      |                    |                |         |       | Instrumentalness proximity: 1.00 (+1.5)  |
+|      |                    |                |         |       | Speechiness proximity: 0.98 (+0.49)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+|    2 | Library Rain       | Paper Lanterns | lofi    |  5.63 | Energy proximity: 0.95 (+2.85)           |
+|      |                    |                |         |       | Acousticness proximity: 0.84 (+0.84)     |
+|      |                    |                |         |       | Instrumentalness proximity: 0.97 (+1.46) |
+|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+|    3 | Focus Flow         | LoRoom         | lofi    |  5.53 | Energy proximity: 0.90 (+2.7)            |
+|      |                    |                |         |       | Acousticness proximity: 0.92 (+0.92)     |
+|      |                    |                |         |       | Instrumentalness proximity: 0.95 (+1.43) |
+|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+
+Why these (plain voice):
+  1. Spacewalk Thoughts: the energy is close to your target, the acoustic balance fits, there is little or no singing and the amount of spoken word fits.
+  2. Library Rain: the energy is close to your target, the acoustic balance fits, there is little or no singing and the amount of spoken word fits.
+  3. Focus Flow: the energy is close to your target, the acoustic balance fits, there is little or no singing and the amount of spoken word fits.
+
+Trace appended to logs/agent_traces.md
+[exit code: 0]
+
+------------------------------------------------------------------------
+

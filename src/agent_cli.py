@@ -13,6 +13,7 @@ from src.agent.hints import make_enricher
 from src.agent.knowledge import build_index
 from src.agent.loop import DEFAULT_K, run_agent
 from src.agent.trace import append_trace, render_trace
+from src.agent.voices import VOICE_PLAIN, VOICES, explain_all
 from src.agent.types import (
     STATUS_ACCEPTED,
     STATUS_BEST_EFFORT,
@@ -54,6 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(WEIGHT_STRATEGIES),
         help="force a ranking mode instead of letting the planner choose",
     )
+    parser.add_argument(
+        "--voice",
+        choices=VOICES,
+        default=VOICE_PLAIN,
+        help="explanation style for the recommendations",
+    )
     parser.add_argument("--trace", action="store_true", help="print the full reasoning trace")
     parser.add_argument(
         "--no-rag",
@@ -66,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def render_result(result: AgentResult, show_trace: bool) -> str:
+def render_result(result: AgentResult, show_trace: bool, voice: str = VOICE_PLAIN) -> str:
     label = STATUS_LABELS.get(result.status, result.status.upper())
     lines: List[str] = [
         f'Query: "{result.query}"',
@@ -81,6 +88,11 @@ def render_result(result: AgentResult, show_trace: bool) -> str:
             lines.append(f"Retrieved: {note[len('knowledge: retrieved '):]}")
     if result.recommendations:
         lines.extend(["", format_table(list(result.recommendations))])
+        lines.extend(["", f"Why these ({voice} voice):"])
+        lines.extend(
+            f"  {rank}. {text}"
+            for rank, text in enumerate(explain_all(result.recommendations, voice), start=1)
+        )
     if show_trace:
         lines.extend(["", render_trace(result)])
     return "\n".join(lines)
@@ -99,7 +111,7 @@ def main(argv: Sequence[str] = None) -> int:
 
     enrich = None if args.no_rag else make_enricher(build_index(songs))
     result = run_agent(args.query, songs, k=args.top, mode=args.mode, enrich=enrich)
-    print(render_result(result, show_trace=args.trace))
+    print(render_result(result, show_trace=args.trace, voice=args.voice))
     if not args.no_log:
         log_path = append_trace(result)
         print(f"\nTrace appended to {log_path.relative_to(log_path.parents[1])}")
