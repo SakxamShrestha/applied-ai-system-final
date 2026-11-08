@@ -200,6 +200,7 @@ an agent that owns the preference dictionary a human used to write by hand.
 | Revise | Concede the cheapest thing that could unblock the critic | `src/agent/planner.py` |
 | Explain | Re-express the scorer's reasons in a chosen voice | `src/agent/voices.py` |
 | Personalize | Carry a saved taste profile into every query, with vetoes the planner will not concede | `src/agent/profile.py` |
+| Import | Derive that profile from a real Spotify playlist export | `src/agent/spotify.py` |
 
 One change was made inside the original code: `instrumentalness` and `speechiness` were
 given weights in all three ranking modes. Both columns existed in `data/songs.csv` and
@@ -242,6 +243,17 @@ rather than filters. On a real catalog they should be filters.
 requirements satisfied, a 15% penalty per revision and a scaling by the share of the
 original request still honoured. It is useful for ranking one answer against another and
 should not be read as a likelihood of listener satisfaction.
+
+**An imported profile is one playlist, not a person.** `src/import_spotify.py` infers
+taste from whatever playlist was exported, so a workout playlist produces a listener who
+only likes loud music. It deliberately refuses to infer dislikes — absence from a playlist
+is not a dislike — but it still presents a partial snapshot as though it were a whole taste.
+The written `notes` field records how many tracks it came from, which is the only hedge.
+
+**Spotify's genre vocabulary does not fit this catalog.** `chicago rap` and `atlanta trap`
+both collapse onto `hip-hop`, which loses real distinctions. Anything unmapped is dropped
+with a warning rather than forced into the nearest bucket, so an export of music this
+catalog cannot represent produces an honestly empty profile rather than a wrong one.
 
 **The saved profile encodes one person's taste as the default.** `profiles/me.json`
 biases every query toward four genres and vetoes two others. That is the point, but it means
@@ -360,7 +372,7 @@ any behaviour look expected.
 
 ```text
 $ python -m pytest -q
-148 passed
+194 passed
 
 $ python eval/run_eval.py
 20/20 cases passed | mean confidence 0.62 | 3 guardrail rejection(s)
@@ -441,6 +453,9 @@ voice can assert something the score does not support, and repeated runs are ide
   currently just my opinions in a markdown file.
 - **Listening feedback**, so the critic can eventually check whether a recommendation was
   good rather than only whether it was compliant.
+- **Keep importing beyond one playlist** — a Spotify data download carries real play
+  counts, which would weight the inferred profile by what was actually listened to rather
+  than by what one playlist contains.
 - **Measured audio features** for the 11 hand-estimated catalog rows, so the system stops
   ranking on my guesses about songs I happen to like.
 - **Warn when a profile veto is the reason something is missing**, so a filter bubble the

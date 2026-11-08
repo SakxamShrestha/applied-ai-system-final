@@ -1,0 +1,43 @@
+$ python -m src.import_spotify data/exports/example_export.csv --name "Sakxam" --dry-run
+Read 15 track(s) from the export.
+  with audio features: 15
+  catalog genres found: hip-hop x7, j-pop x3, nepali x3, city pop x2
+Inferred profile: Sakxam — genres hip-hop/j-pop/nepali/city pop, decades 2010s/1980s, usual energy 0.65, likes hits
+
+Profile that would be written:
+{
+  "name": "Sakxam",
+  "favorite_genres": [
+    "hip-hop",
+    "j-pop",
+    "nepali",
+    "city pop"
+  ],
+  "favorite_decades": [
+    "2010s",
+    "1980s"
+  ],
+  "typical_energy": 0.65,
+  "likes_popular": true,
+  "notes": "Imported from a Spotify export of 15 track(s). Mean track popularity 68."
+}
+
+15 of 15 track(s) carry enough audio features to become catalog rows.
+
+Dry run: nothing written. Pass --write to save.
+[exit code: 0]
+
+------------------------------------------------------------------------
+
+$ python -m src.import_spotify data/exports/missing_columns.csv
+Error: Export is missing required column(s): Track Name, Artist Name(s). Found: song, who
+[exit code: 1]
+
+------------------------------------------------------------------------
+
+$ python -m src.import_spotify data/exports/does_not_exist.csv
+Error: Spotify export not found: data/exports/does_not_exist.csv. Export a playlist at https://exportify.net and save the CSV, or try the bundled sample at data/exports/example_export.csv.
+[exit code: 1]
+
+------------------------------------------------------------------------
+

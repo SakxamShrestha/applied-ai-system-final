@@ -46,6 +46,7 @@ weight at all, so no request could act on them.
 | **Evaluation harness** | 20 golden cases asserting behaviour, with a pass/fail summary and non-zero exit on regression | `eval/run_eval.py` |
 | **Reasoning traces** | Every pass written to a committed log | `src/agent/trace.py`, `logs/agent_traces.md` |
 | **Saved taste profile** | Background preferences the agent carries into every query, with vetoes it will not concede | `src/agent/profile.py` |
+| **Spotify import** | Derives that profile from a real playlist export, mapping Spotify's genre vocabulary onto the catalog | `src/agent/spotify.py`, `src/import_spotify.py` |
 | **Interfaces** | CLI (reference) and a Streamlit page | `src/agent_cli.py`, `src/app.py` |
 
 The original scorer and ranker (`score_song`, `recommend_songs`) are still the engine; the
@@ -83,6 +84,7 @@ flowchart TD
     end
     Q --> IDX
     IDX -->|"hints -> soft targets only"| P
+    SPOT["Spotify export CSV"] -->|"src/import_spotify.py"| PROF
     PROF["profiles/me.json<br/>saved taste: genres · energy · vetoes"] -->|"background preferences;<br/>the query always wins"| P
 
     OUT["AgentResult<br/>status · top-k · confidence · passes"] --> VOICE["EXPLAIN<br/>plain | dj | critic"]
@@ -93,7 +95,7 @@ flowchart TD
 
     subgraph EVAL["Checking"]
         GS["eval/golden_queries.json"] --> H["eval/run_eval.py"]
-        TESTS["tests/ — 148 pytest cases"] --> H
+        TESTS["tests/ — 194 pytest cases"] --> H
     end
     OUT -.-> H
 ```
@@ -143,7 +145,7 @@ vocabulary of its own catalog.
 Verify the install:
 
 ```bash
-python -m pytest -q          # 148 tests
+python -m pytest -q          # 194 tests
 python eval/run_eval.py      # 20 golden cases, exits non-zero on regression
 ```
 
@@ -166,6 +168,8 @@ python -m src.agent_cli "QUERY" --no-log         # do not append to logs/agent_t
 
 streamlit run src/app.py                         # same agent, browser UI
 python -m src.main                               # the original Module 3 experiments
+
+python -m src.import_spotify EXPORT.csv --dry-run   # build a profile from a Spotify export
 ```
 
 Exit codes: `0` answered (accepted or best effort), `1` catalog could not be loaded,
@@ -407,7 +411,7 @@ correct. And my "too long" case was exactly 300 characters, which is not over th
 
 ```bash
 $ python -m pytest -q
-148 passed
+194 passed
 ```
 
 Coverage is 89% overall and 90–100% on every `src/agent` module. The gap is
@@ -638,6 +642,82 @@ Retrieved: 'EDM and synthwave' (genres.md, similarity 0.25) -> energy=0.85, danc
 ... (full output in logs/demo_run.txt)
 ```
 
+### Spotify import: build the profile from your real listening
+
+`profiles/me.json` can be written by hand, or derived from a Spotify playlist export.
+Export any playlist to CSV at [exportify.net](https://exportify.net), then:
+
+```bash
+python -m src.import_spotify my_playlist.csv --name "Your Name" --dry-run   # inspect
+python -m src.import_spotify my_playlist.csv --name "Your Name" --write     # save profile
+python -m src.import_spotify my_playlist.csv --write --append-catalog       # + add songs
+```
+
+A sample export ships with the repo so this is runnable without a Spotify account:
+
+```text
+$ python -m src.import_spotify data/exports/example_export.csv --name "Sakxam" --dry-run
+Read 15 track(s) from the export.
+  with audio features: 15
+  catalog genres found: hip-hop x7, j-pop x3, nepali x3, city pop x2
+Inferred profile: Sakxam — genres hip-hop/j-pop/nepali/city pop, decades 2010s/1980s, usual energy 0.65, likes hits
+
+Profile that would be written:
+{
+  "name": "Sakxam",
+  "favorite_genres": [
+    "hip-hop",
+    "j-pop",
+    "nepali",
+    "city pop"
+  ],
+  "favorite_decades": [
+    "2010s",
+    "1980s"
+  ],
+  "typical_energy": 0.65,
+  "likes_popular": true,
+  "notes": "Imported from a Spotify export of 15 track(s). Mean track popularity 68."
+}
+
+15 of 15 track(s) carry enough audio features to become catalog rows.
+
+Dry run: nothing written. Pass --write to save.
+[exit code: 0]
+```
+
+What it decides, and what it refuses to decide:
+
+| Export data | Becomes | Why |
+|---|---|---|
+| Artist genres, by frequency | `favorite_genres` | Spotify's vocabulary is far more granular than this catalog's, so `chicago rap`, `atlanta trap` and `hip hop` all collapse onto `hip-hop`; `japanese city pop` resolves to `city pop`, not `j-pop` |
+| Album release dates | `favorite_decades` | Only decades holding at least 15% of the export, so one old track does not become a stated taste |
+| Mean track popularity | `likes_popular` | Above 60 means hits, below 45 means deep cuts, in between stays unset |
+| Mean energy, if the export has audio features | `typical_energy` | Left unset when absent, rather than guessed |
+| Genres *absent* from the export | **nothing** | Absence from one playlist is not a dislike. The importer never writes a veto; you add `avoid_genres` by hand |
+
+**Why a file import and not the Spotify API.** The six values this recommender ranks on —
+energy, danceability, valence, acousticness, instrumentalness, speechiness — come from
+Spotify's audio-features endpoint, which newly registered apps can no longer call. A file
+import also keeps the system reproducible with no key, no OAuth and no network, which is the
+rule the rest of the project follows. When an export has no audio-feature columns the
+importer still builds a profile from genres, decades and popularity, and says what it could
+not determine.
+
+The export is treated as untrusted input, so the same guardrail discipline applies:
+
+```text
+$ python -m src.import_spotify data/exports/missing_columns.csv
+Error: Export is missing required column(s): Track Name, Artist Name(s). Found: song, who
+[exit code: 1]
+```
+
+```text
+$ python -m src.import_spotify data/exports/does_not_exist.csv
+Error: Spotify export not found: data/exports/does_not_exist.csv. Export a playlist at https://exportify.net and save the CSV, or try the bundled sample at data/exports/example_export.csv.
+[exit code: 1]
+```
+
 ### Agentic workflow enhancement: committed reasoning traces
 
 Every pass is written to [`logs/agent_traces.md`](logs/agent_traces.md) with its plan,
@@ -729,7 +809,7 @@ three count as revisions.
 ├── eval/                 # golden cases + evaluation harness
 ├── diagrams/             # architecture.mmd (Mermaid source of record)
 ├── logs/                 # generated evidence: demo_run, eval_run, agent_traces
-├── tests/                # 148 pytest cases
+├── tests/                # 194 pytest cases
 ├── data/songs.csv        # 31-song catalog
 ├── model_card.md         # limitations, bias, misuse, AI-collaboration reflection
 └── ai_interactions.md    # AI collaboration log + an embedded reasoning trace
