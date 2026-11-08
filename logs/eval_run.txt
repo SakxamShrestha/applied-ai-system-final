@@ -4,10 +4,10 @@ Case                                      RAG  Status       Expected     Conf  R
 ----------------------------------------  ---  -----------  -----------  ----  ---  ------
 easy_genre_and_energy                     off  accepted     accepted     0.84  0    PASS
 study_lofi                                off  accepted     accepted     1.00  0    PASS
-over_constrained_self_corrects            off  best_effort  best_effort  0.61  2    PASS
-instrumental_filter_survives_revision     off  best_effort  best_effort  0.47  1    PASS
+over_constrained_self_corrects            off  best_effort  best_effort  0.30  2    PASS
+instrumental_filter_survives_revision     off  best_effort  best_effort  0.31  1    PASS
 obscure_instrumental_coding               off  accepted     accepted     0.79  0    PASS
-decade_and_genre                          off  best_effort  best_effort  0.81  1    PASS
+decade_and_genre                          off  best_effort  best_effort  0.54  1    PASS
 mood_only                                 off  accepted     accepted     0.65  0    PASS
 veto_is_honoured                          off  accepted     accepted     0.65  0    PASS
 contradictory_filters_are_infeasible      off  infeasible   infeasible   0.00  0    PASS
@@ -17,6 +17,6 @@ overlong_query_rejected                   off  rejected     rejected     0.00  0
 rag_focus_prefers_instrumental            on   accepted     accepted     1.00  0    PASS
 no_rag_focus_admits_a_vocal_track         off  accepted     accepted     0.80  0    PASS
 rag_gym_query_targets_high_energy         on   accepted     accepted     1.00  0    PASS
-rag_over_constrained_still_self_corrects  on   best_effort  best_effort  0.85  1    PASS
+rag_over_constrained_still_self_corrects  on   best_effort  best_effort  0.42  1    PASS
 
-16/16 cases passed | mean confidence 0.59 | 3 guardrail rejection(s)
+16/16 cases passed | mean confidence 0.52 | 3 guardrail rejection(s)

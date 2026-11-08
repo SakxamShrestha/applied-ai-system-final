@@ -21,6 +21,9 @@ CONFIDENCE_REQUIREMENT_WEIGHT = 0.5
 # Each revision costs this much confidence, multiplicatively.
 REVISION_CONFIDENCE_PENALTY = 0.85
 MAX_SAME_ARTIST = 2
+# Floor applied once a run has surrendered part of the request: the answer is real,
+# it just is not what was asked for.
+MIN_SURRENDERED_CONFIDENCE = 0.05
 
 Pick = Tuple[Dict, float, str]
 
@@ -132,3 +135,16 @@ def critique(
     checks.extend(_veto_check(plan, picks))
     checks.append(_artist_spread_check(picks))
     return Verdict(checks=tuple(checks), confidence=_confidence(plan, picks, revisions))
+
+
+def confidence_after_surrender(confidence: float, surrendered: int, original: int) -> float:
+    """Scale confidence by the share of the original request still honoured.
+
+    The critic only ever sees the *surviving* constraints, so a run that reached
+    "all checks pass" by giving two requirements away would otherwise report the
+    same confidence as one that satisfied everything.
+    """
+    if surrendered <= 0 or original <= 0:
+        return round(max(0.0, min(1.0, confidence)), 2)
+    honoured = max(0, original - surrendered) / original
+    return round(max(MIN_SURRENDERED_CONFIDENCE, min(1.0, confidence * honoured)), 2)

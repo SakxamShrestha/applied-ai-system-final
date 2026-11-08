@@ -133,3 +133,84 @@ The penalty depends on what has already been picked, so it has to be applied ste
 - This log: the review list above, the strategy alternatives, and this entry.
 
 **Verification:** 23 pytest tests pass. `python -m src.main` exits with code 0. Every output table in the README was inserted from the program's output, and the diversity claim was checked against Experiment 3.
+
+
+---
+
+# Project 4: agentic extension
+
+## Reasoning traces (stretch feature evidence)
+
+Every agent run appends its full plan/act/critique/revise trace to
+[`logs/agent_traces.md`](logs/agent_traces.md), written by `src/agent/trace.py`. The file is
+append-only, so a session's history survives. `python -m src.agent_cli "QUERY" --trace`
+prints the same trace to the terminal.
+
+One trace is embedded below in full: the over-constrained query that the agent cannot fully
+satisfy. It shows the planner relaxing the least specific requirement first (pass 1),
+detecting that the concession left the ranking unchanged and switching ranking strategy
+instead of spending another concession (passes 2–4), and finally reporting best effort with
+the surrendered requirements named.
+
+```text
+## Query: "chill acoustic 90s stuff for studying, nothing too poppy"
+
+- Status: **best_effort** (confidence 0.42, 1 counted revision over 5 passes)
+- Outcome: Best effort: the catalog has nothing matching mood = chill, release decade =
+  1990s, so that part of the request was given up. Everything else still holds.
+- Surrendered: mood = chill, release decade = 1990s
+
+### Reasoning trace
+
+- **Pass 1** - mode `vibe_and_energy`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill,
+      release_decade=1990s, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill; release decade = 1990s
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96),
+      Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - CRITIC: 5/7 checks passed, confidence 0.67
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'; top pick has
+      release_decade='2000s', wanted '1990s'
+    - ACTION: revise: relaxed release decade = 1990s
+- **Pass 2** - mode `vibe_and_energy`, 18 song(s) survived the filter stage
+    - REQUIREMENTS: genre = acoustic; mood = chill
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96),
+      Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: switched ranking mode to balanced
+- **Pass 3** - mode `balanced`, 18 song(s) survived the filter stage
+    - ACT: Porch Light Letters (5.24), Midnight Coding (4.03), Library Rain (3.94),
+      Spacewalk Thoughts (3.90), Slow Burn Text (2.84)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: switched ranking mode to genre_first
+- **Pass 4** - mode `genre_first`, 18 song(s) survived the filter stage
+    - ACT: Porch Light Letters (5.87), Midnight Coding (2.48), Library Rain (2.46),
+      Spacewalk Thoughts (2.44), Slow Burn Text (1.62)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: relaxed mood = chill
+- **Pass 5** - mode `genre_first`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic
+    - ACT: Porch Light Letters (5.87), Slow Burn Text (1.62), Velvet Hours (1.56),
+      Coffee Shop Stories (1.53), Midnight Coding (1.48)
+    - CRITIC: 5/5 checks passed, confidence 0.85
+    - ACTION: accept
+```
+
+## How AI was used on the extension
+
+| Stage | What AI did | What I did |
+|---|---|---|
+| Choosing the extension | Generated four options with failure modes and a recommendation | Rejected part of the recommendation (keeping the RAG stretch) and set the scope |
+| De-risking | Wrote a throwaway spike that ran the plan/critique loop against the real catalog before any production code | Required the spike before approving the design |
+| Architecture | Proposed splitting hard filters from weighted scoring after the spike exposed the failure | Accepted; it is now the core of the extension |
+| Implementation | Wrote modules test-first, 109 new pytest cases | Reviewed each failure and decided whether the test or the code was wrong |
+| Evaluation | Built the golden-case harness | Wrote expectations; the harness then proved two of them wrong |
+
+The full reflection, including the suggestion I accepted and the one I rejected, is in
+[`model_card.md`](model_card.md) sections 14 and 15.

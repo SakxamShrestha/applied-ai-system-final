@@ -176,3 +176,18 @@ def test_revise_never_surrenders_a_veto_and_eventually_gives_up():
     verdict = critique(plan, picks, survivors=1)
 
     assert revise(plan, verdict) is None
+
+
+def test_confidence_after_surrender_scales_by_what_was_honoured():
+    from src.agent.critic import confidence_after_surrender
+
+    assert confidence_after_surrender(0.8, surrendered=0, original=4) == pytest.approx(0.8)
+    assert confidence_after_surrender(0.8, surrendered=2, original=4) == pytest.approx(0.4)
+    assert confidence_after_surrender(0.8, surrendered=4, original=4) > 0.0
+
+
+def test_confidence_after_surrender_is_bounded():
+    from src.agent.critic import confidence_after_surrender
+
+    assert confidence_after_surrender(5.0, surrendered=0, original=0) == pytest.approx(1.0)
+    assert confidence_after_surrender(-1.0, surrendered=0, original=0) == pytest.approx(0.0)

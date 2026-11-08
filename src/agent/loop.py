@@ -8,7 +8,7 @@ from dataclasses import replace
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from src.agent.constraints import apply_filters, nearest_misses, prune_counts
-from src.agent.critic import critique
+from src.agent.critic import confidence_after_surrender, critique
 from src.agent.planner import revise
 from src.agent.query_parser import QueryValidationError, parse_query, validate_query
 from src.agent.types import (
@@ -149,7 +149,9 @@ def run_agent(
                 query=cleaned,
                 status=status,
                 recommendations=tuple(picks),
-                confidence=verdict.confidence,
+                confidence=confidence_after_surrender(
+                    verdict.confidence, len(surrendered), len(original_constraints)
+                ),
                 passes=tuple(passes),
                 message=_final_message(status, plan, surrendered),
                 plan=plan,
@@ -182,7 +184,9 @@ def run_agent(
         query=cleaned,
         status=STATUS_BEST_EFFORT,
         recommendations=tuple(last_picks),
-        confidence=verdict.confidence if verdict else 0.0,
+        confidence=confidence_after_surrender(
+            verdict.confidence if verdict else 0.0, len(surrendered), len(original_constraints)
+        ),
         passes=tuple(passes),
         message=_final_message(STATUS_BEST_EFFORT, plan, surrendered),
         plan=plan,

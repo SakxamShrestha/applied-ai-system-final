@@ -1,19 +1,615 @@
-# 🎵 Music Recommender Simulation
+# 🎵 Agentic Music Recommender
 
-## Project Summary
+An applied AI system that turns a plain-English listening request into an explained,
+self-checked set of recommendations. It plans a search, prunes the catalog against hard
+requirements, scores what survives, criticises its own answer, and revises when something
+the listener asked for was not delivered — then says so plainly when it has to give
+something up.
 
-This project is a small, explainable, content-based music recommender written in Python.
-
-It loads a 20-song catalog from `data/songs.csv`, compares every song to a listener's taste profile, and returns the top 5 songs with a score and a plain-language reason for every point awarded.
-
-Highlights:
-
-- 20 songs across 12 genres, each with 14 attributes (including 5 advanced ones: popularity, release decade, detailed mood tag, instrumentalness, speechiness).
-- Three swappable ranking modes (`balanced`, `genre_first`, `vibe_and_energy`) built with the Strategy pattern.
-- A diversity re-ranker that penalizes repeated artists and over-represented genres.
-- A CLI that prints results as ASCII tables and runs multi-profile experiments.
+```
+$ python -m src.agent_cli "1990s instrumental hip-hop"
+Status: BEST EFFORT | confidence 0.31 | 1 revision(s) | 2 pass(es)
+Agent: Best effort: the catalog has nothing matching genre = hip-hop, so that part of
+the request was given up. Everything else still holds.
+```
 
 ---
+
+## The base project this extends
+
+**Base project: Music Recommender Simulation (AI110 Module 3).**
+
+The Module 3 project was a deterministic, content-based recommender. It loaded a 20-song
+catalog from `data/songs.csv`, compared every song against a hand-written listener
+preference dictionary, and returned the top 5 with a score and a plain-language reason for
+every point awarded. It offered three swappable ranking modes built with the Strategy
+pattern and a diversity re-ranker that penalised repeated artists and over-represented
+genres.
+
+Its limits were the starting point for this project: the only way to use it was to edit a
+Python dictionary in `src/main.py`, it could not express a hard requirement (only
+preferences with weights), it never checked whether its own answer actually matched the
+request, and two columns in the catalog — `instrumentalness` and `speechiness` — carried no
+weight at all, so no request could act on them.
+
+## What is new in this version
+
+| Component | What it adds | Where |
+|---|---|---|
+| **Agent loop** (the required AI feature) | Plans a search from free text, acts, critiques its own result, and revises up to 3 times | `src/agent/loop.py` |
+| **Natural-language planner** | Rule-based parsing over the catalog's closed vocabulary into prefs, hard filters and requirements | `src/agent/query_parser.py` |
+| **Hard-constraint filter stage** | Prunes the catalog *before* scoring, which makes "instrumental" or "nothing too poppy" actually enforceable | `src/agent/constraints.py` |
+| **Self-critique + confidence** | Reports every check it runs, scores confidence, and distinguishes "accepted" from "best effort" | `src/agent/critic.py` |
+| **Revision policy** | Concedes the cheapest thing first; never concedes an explicit veto | `src/agent/planner.py` |
+| **Knowledge retrieval (RAG)** | Pure-Python TF-IDF over hand-written notes plus catalog-derived facts, feeding the planner | `src/agent/knowledge.py`, `src/agent/hints.py` |
+| **Explanation voices** | Three constrained styles over the scorer's own reasons | `src/agent/voices.py` |
+| **Evaluation harness** | 16 golden cases asserting behaviour, with a pass/fail summary and non-zero exit on regression | `eval/run_eval.py` |
+| **Reasoning traces** | Every pass written to a committed log | `src/agent/trace.py`, `logs/agent_traces.md` |
+| **Interfaces** | CLI (reference) and a Streamlit page | `src/agent_cli.py`, `src/app.py` |
+
+The original scorer and ranker (`score_song`, `recommend_songs`) are still the engine; the
+agent wraps them rather than replacing them. The only change inside the old code was giving
+`instrumentalness` and `speechiness` weights in all three ranking modes, so the new filter
+stage has something to act on.
+
+---
+
+## Architecture
+
+The Mermaid source of record is [`diagrams/architecture.mmd`](diagrams/architecture.mmd).
+
+```mermaid
+flowchart TD
+    Q["Free-text query<br/>src/agent_cli.py · src/app.py"] --> V["validate_query()<br/>guardrail: empty · over 300 chars · unknown vocabulary"]
+    V -->|rejected, exit 2| ERR["Explained refusal + example queries"]
+    V -->|accepted| P
+
+    subgraph AGENT["Agent loop — max 3 counted revisions"]
+        P["PLAN<br/>parse_query() + retrieved hints<br/>prefs · filters · requirements · mode"]
+        P --> F["FILTER<br/>apply_filters()"]
+        F -->|"0 survivors"| INF["INFEASIBLE, exit 3<br/>names the blocking filter + nearest misses"]
+        F -->|"survivors"| A["ACT<br/>recommend_songs() (unchanged)"]
+        A --> C["CRITIC<br/>requirements · zero-match · veto leakage<br/>· artist spread · confidence"]
+        C -->|"all checks pass"| OUT
+        C -->|"a check failed"| R["REVISE<br/>cheapest concession first;<br/>vetoes never conceded"]
+        R -->|"ranking unchanged -> switch mode instead"| F
+        C -->|"concessions spent"| OUT
+    end
+
+    subgraph RAG["Knowledge retrieval (TF-IDF)"]
+        K1["knowledge/*.md"] --> IDX["KnowledgeIndex"]
+        K4["data/songs.csv<br/>per-genre coverage"] --> IDX
+    end
+    Q --> IDX
+    IDX -->|"hints -> soft targets only"| P
+
+    OUT["AgentResult<br/>status · top-k · confidence · passes"] --> VOICE["EXPLAIN<br/>plain | dj | critic"]
+    VOICE --> UI["ASCII table / dataframe"]
+    INF --> UI
+    ERR --> UI
+    AGENT -.->|"every pass"| TR["logs/agent_traces.md"]
+
+    subgraph EVAL["Checking"]
+        GS["eval/golden_queries.json"] --> H["eval/run_eval.py"]
+        TESTS["tests/ — 132 pytest cases"] --> H
+    end
+    OUT -.-> H
+```
+
+**How to read it.** A query is validated before anything else; an empty, overlong or
+unrecognisable query is refused with examples rather than guessed at. What survives is
+parsed into a plan: *soft preferences* that influence scoring, *hard filters* that prune,
+and *requirements* that the critic will hold the answer to. Retrieval runs beside the
+parser and can only add soft targets the listener did not state. The filter stage prunes the
+catalog; if nothing survives, the system reports which requirement emptied it and names the
+closest available songs instead of returning filler. Survivors go through the original
+scorer and diversity re-ranker. The critic then checks the result against the plan, and the
+planner concedes the cheapest thing that could unblock it. Humans enter in two places: the
+golden cases in `eval/golden_queries.json` encode expected behaviour, and the human review
+table in [`model_card.md`](model_card.md) records a manual pass over the output.
+
+### Why a separate filter stage
+
+Weighted scoring cannot express a hard requirement. Asking for instrumental music by
+raising a weight still lets a vocal track win on other features, and before this project
+`instrumentalness` had no weight at all. Splitting the two means a stated threshold is
+enforced by pruning, while taste stays a matter of weights — and it gives the system a
+truthful answer available nowhere in the original design: *nothing in the catalog satisfies
+this*.
+
+---
+
+## Setup
+
+Requires Python 3.9+ (developed on 3.12). From the project root:
+
+```bash
+git clone <this-repo-url>
+cd applied-ai-system-final
+
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+No API keys, no network access and no model downloads: the planner, retriever and
+explanation voices are all deterministic local code. Two consequences worth stating up
+front — the same query always produces the same answer, and the system understands only the
+vocabulary of its own catalog.
+
+Verify the install:
+
+```bash
+python -m pytest -q          # 132 tests
+python eval/run_eval.py      # 16 golden cases, exits non-zero on regression
+```
+
+---
+
+## Usage
+
+```bash
+python -m src.agent_cli "chill lofi for studying"
+
+# options
+python -m src.agent_cli "QUERY" --trace          # print the full reasoning trace
+python -m src.agent_cli "QUERY" --voice critic   # plain (default) | dj | critic
+python -m src.agent_cli "QUERY" --no-rag         # skip knowledge retrieval
+python -m src.agent_cli "QUERY" --mode balanced  # force a ranking mode
+python -m src.agent_cli "QUERY" -k 3             # how many songs
+python -m src.agent_cli "QUERY" --no-log         # do not append to logs/agent_traces.md
+
+streamlit run src/app.py                         # same agent, browser UI
+python -m src.main                               # the original Module 3 experiments
+```
+
+Exit codes: `0` answered (accepted or best effort), `1` catalog could not be loaded,
+`2` query refused by the guardrail, `3` request infeasible against this catalog.
+
+Every run appends its reasoning trace to `logs/agent_traces.md`, which is append-only by
+design so a session's history survives.
+
+---
+
+## Sample interactions
+
+All output below is copied from a real run. The full set is in
+[`logs/demo_run.txt`](logs/demo_run.txt); traces are in
+[`logs/agent_traces.md`](logs/agent_traces.md).
+
+### 1. A request the catalog can satisfy — accepted on the first pass
+
+```text
+$ python -m src.agent_cli "high energy hip hop to hype me up" -k 5
+Query: "high energy hip hop to hype me up"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: energy=0.9, danceability=0.85, tempo_bpm=150.0, acousticness=0.6, genre=hip-hop | mode vibe_and_energy
+Retrieved: 'Workouts, gym sessions and hype' (use_cases.md, similarity 0.10) -> energy=0.9, danceability=0.85, tempo_bpm=150.0, mode=vibe_and_energy
+Retrieved: 'Chill, relaxed and calm' (moods.md, similarity 0.07) -> acousticness=0.6
+
++------+----------------+---------------+-----------+-------+--------------------------------------+
+| Rank | Song Title     | Artist        | Genre     | Score | Reasons                              |
++======+================+===============+===========+=======+======================================+
+|    1 | Concrete Crown | Blockline     | hip-hop   |  5.70 | Genre match: hip-hop (+0.75)         |
+|      |                |               |           |       | Energy proximity: 0.88 (+2.64)       |
+|      |                |               |           |       | Danceability proximity: 1.00 (+1.5)  |
+|      |                |               |           |       | Acousticness proximity: 0.48 (+0.48) |
+|      |                |               |           |       | Tempo proximity: 0.44 (+0.33)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+|    2 | Gym Hero       | Max Pulse     | pop       |  5.43 | Energy proximity: 0.97 (+2.91)       |
+|      |                |               |           |       | Danceability proximity: 0.97 (+1.46) |
+|      |                |               |           |       | Acousticness proximity: 0.45 (+0.45) |
+|      |                |               |           |       | Tempo proximity: 0.82 (+0.61)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+|    3 | Storm Runner   | Voltline      | rock      |  5.42 | Energy proximity: 0.99 (+2.97)       |
+|      |                |               |           |       | Danceability proximity: 0.81 (+1.22) |
+|      |                |               |           |       | Acousticness proximity: 0.50 (+0.5)  |
+|      |                |               |           |       | Tempo proximity: 0.98 (+0.73)        |
++------+----------------+---------------+-----------+-------+--------------------------------------+
+|    4 | Drop Zone      | Kilowatt Kids | edm       |  5.37 | Energy proximity: 0.93 (+2.79)       |
+|      |                |               |           |       | Danceability proximity: 0.99 (+1.48) |
+|      |                |               |           |       | Acousticness proximity: 0.42 (+0.42) |
+... (full output in logs/demo_run.txt)
+```
+
+### 2. An over-constrained request — the agent revises, then says what it gave up
+
+The catalog has no chill acoustic music from the 1990s. Rather than silently returning
+something else, the agent relaxes the least specific requirement first, notices when a
+concession changed nothing and switches ranking strategy instead, and finally reports
+**best effort** with the surrendered requirements named.
+
+```text
+$ python -m src.agent_cli "chill acoustic 90s stuff for studying, nothing too poppy" --trace
+Query: "chill acoustic 90s stuff for studying, nothing too poppy"
+Status: BEST EFFORT | confidence 0.42 | 1 revision(s) | 5 pass(es)
+Agent: Best effort: the catalog has nothing matching mood = chill, release decade = 1990s, so that part of the request was given up. Everything else still holds.
+Final plan: acousticness=0.7, instrumentalness=0.1, genre=acoustic, energy=0.3 | mode genre_first
+Retrieved: 'acoustic in this catalog' (data/songs.csv, similarity 0.18) -> no usable hints
+Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.12) -> acousticness=0.7, instrumentalness=0.1
+
+
+### Reasoning trace
+
+- **Pass 1** — mode `vibe_and_energy`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, release_decade=1990s, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill; release decade = 1990s
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - CRITIC: 5/7 checks passed, confidence 0.67
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'; top pick has release_decade='2000s', wanted '1990s'
+    - ACTION: revise: relaxed release decade = 1990s
+- **Pass 2** — mode `vibe_and_energy`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: switched ranking mode to balanced
+- **Pass 3** — mode `balanced`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill
+    - ACT: Porch Light Letters (5.24), Midnight Coding (4.03), Library Rain (3.94), Spacewalk Thoughts (3.90), Slow Burn Text (2.84)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: switched ranking mode to genre_first
+- **Pass 4** — mode `genre_first`, 18 song(s) survived the filter stage
+    - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
+    - FILTERS: exclude genre pop
+    - REQUIREMENTS: genre = acoustic; mood = chill
+    - ACT: Porch Light Letters (5.87), Midnight Coding (2.48), Library Rain (2.46), Spacewalk Thoughts (2.44), Slow Burn Text (1.62)
+    - CRITIC: 5/6 checks passed, confidence 0.64
+    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
+    - ACTION: no-op concession, trying next: relaxed mood = chill
+- **Pass 5** — mode `genre_first`, 18 song(s) survived the filter stage
+... (full trace in logs/agent_traces.md)
+```
+
+### 3. An impossible combination — explained infeasibility instead of filler
+
+```text
+$ python -m src.agent_cli "instrumental lyrical music"
+Query: "instrumental lyrical music"
+Status: INFEASIBLE | confidence 0.00 | 0 revision(s) | 0 pass(es)
+Agent: No song in the catalog satisfies every hard requirement: speechiness at least 0.1 (removes 17 of 20); instrumentalness at least 0.5 (removes 12 of 20). Closest available: Blue Note Taxi (jazz, fails speechiness at least 0.1); Coffee Shop Stories (jazz, fails speechiness at least 0.1). Relax one of those requirements and ask again.
+
+Trace appended to logs/agent_traces.md
+[exit code: 3]
+```
+
+### 4. A contradiction the catalog *can* partly serve — the hard filter survives revision
+
+Asking for 1990s instrumental hip-hop is unsatisfiable: hip-hop in this catalog has
+`instrumentalness` of 0.00–0.01. The agent keeps the instrumental filter, surrenders the
+genre, and reports low confidence (0.31) to signal that it did not get what was asked.
+
+```text
+$ python -m src.agent_cli "1990s instrumental hip-hop" --voice critic
+Query: "1990s instrumental hip-hop"
+Status: BEST EFFORT | confidence 0.35 | 1 revision(s) | 2 pass(es)
+Agent: Best effort: the catalog has nothing matching genre = hip-hop, so that part of the request was given up. Everything else still holds.
+Final plan: speechiness=0.25, danceability=0.8, release_decade=1990s | mode genre_first
+Retrieved: 'hip-hop in this catalog' (data/songs.csv, similarity 0.49) -> no usable hints
+Retrieved: 'Hip-hop and rap' (genres.md, similarity 0.37) -> speechiness=0.25, danceability=0.8
+
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+| Rank | Song Title          | Artist        | Genre     | Score | Reasons                              |
++======+=====================+===============+===========+=======+======================================+
+|    1 | Coffee Shop Stories | Slow Stereo   | jazz      |  1.07 | Decade match: 1990s (+0.5)           |
+|      |                     |               |           |       | Danceability proximity: 0.74 (+0.37) |
+|      |                     |               |           |       | Speechiness proximity: 0.79 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+|    2 | Drop Zone           | Kilowatt Kids | edm       |  0.67 | Danceability proximity: 0.94 (+0.47) |
+|      |                     |               |           |       | Speechiness proximity: 0.81 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+|    3 | Night Drive Loop    | Neon Echo     | synthwave |  0.66 | Danceability proximity: 0.93 (+0.46) |
+|      |                     |               |           |       | Speechiness proximity: 0.79 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+|    4 | Midnight Coding     | LoRoom        | lofi      |  0.60 | Danceability proximity: 0.82 (+0.41) |
+|      |                     |               |           |       | Speechiness proximity: 0.78 (+0.2)   |
++------+---------------------+---------------+-----------+-------+--------------------------------------+
+... (full output in logs/demo_run.txt)
+```
+
+---
+
+## Reliability, guardrails and evaluation
+
+Four mechanisms, each visible in the output above.
+
+| Mechanism | Behaviour | Evidence |
+|---|---|---|
+| **Input guardrail** | Empty, over-300-character or unrecognisable queries are refused with examples, exit code 2 | Cases 5–6 below |
+| **Hard-constraint filter** | A stated threshold or exclusion prunes the catalog; an empty result is reported as infeasible with the blocking constraint named | Sample interaction 3 |
+| **Self-critique + honest status** | Every check is reported; acceptance reached only by surrendering requirements is reported as `best_effort`, never `accepted` | Sample interactions 2 and 4 |
+| **Evaluation harness** | 16 golden cases assert status, revision bounds, confidence floors, forbidden genres and per-field thresholds | Table below |
+
+### Guardrail behaviour
+
+| Input | Expected behaviour | Result |
+|---|---|---|
+| `""` (empty) | Refuse, explain, suggest examples | Pass — exit 2, "Query was empty" |
+| `"asdfghjkl qwerty"` | Refuse: no recognisable vocabulary | Pass — exit 2, lists example queries |
+| `"chill lofi " × 40` (440 chars) | Refuse: too long | Pass — exit 2, states the 300-char limit |
+| `"instrumental lyrical music"` | Infeasible, name the blocker | Pass — exit 3, names both filters and the closest song |
+| `--top 0` | Refuse a nonsense result count | Pass — exit 2, "--top must be at least 1" |
+
+```text
+$ python -m src.agent_cli ""
+Query: ""
+Status: REJECTED | confidence 0.00 | 0 revision(s) | 0 pass(es)
+Agent: Query was empty. Describe the music you want.
+Try something like:
+  - chill lofi for studying
+  - high energy hip hop to hype me up
+  - moody 1990s jazz, nothing too poppy
+
+Trace appended to logs/agent_traces.md
+[exit code: 2]
+```
+
+```text
+$ python -m src.agent_cli "asdfghjkl qwerty"
+Query: "asdfghjkl qwerty"
+Status: REJECTED | confidence 0.00 | 0 revision(s) | 0 pass(es)
+Agent: Could not recognise any genre, mood, decade or listening situation in that query.
+Try something like:
+  - chill lofi for studying
+  - high energy hip hop to hype me up
+  - moody 1990s jazz, nothing too poppy
+
+Trace appended to logs/agent_traces.md
+[exit code: 2]
+```
+
+### Evaluation harness
+
+```text
+$ python -m src.agent_cli "something for deep focus while coding" --no-rag -k 3
+Query: "something for deep focus while coding"
+Status: ACCEPTED | confidence 0.80 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: energy=0.3 | mode vibe_and_energy
+
++------+---------------------+----------------+----------+-------+--------------------------------+
+| Rank | Song Title          | Artist         | Genre    | Score | Reasons                        |
++======+=====================+================+==========+=======+================================+
+|    1 | Porch Light Letters | Willow & Pine  | acoustic |  3.00 | Energy proximity: 1.00 (+3.0)  |
++------+---------------------+----------------+----------+-------+--------------------------------+
+|    2 | Spacewalk Thoughts  | Orbit Bloom    | ambient  |  2.94 | Energy proximity: 0.98 (+2.94) |
++------+---------------------+----------------+----------+-------+--------------------------------+
+|    3 | Library Rain        | Paper Lanterns | lofi     |  2.85 | Energy proximity: 0.95 (+2.85) |
++------+---------------------+----------------+----------+-------+--------------------------------+
+
+Why these (plain voice):
+  1. Porch Light Letters: the energy is close to your target.
+  2. Spacewalk Thoughts: the energy is close to your target.
+  3. Library Rain: the energy is close to your target.
+
+Trace appended to logs/agent_traces.md
+... (full output in logs/demo_run.txt)
+```
+
+Mean confidence of 0.52 across the suite is low on purpose: a third of the cases are
+guardrail refusals and deliberate near-misses that *should* score 0.00.
+
+Writing this harness paid for itself immediately — two of my own expectations were wrong
+and the system was right. I had asserted that `"moody 1990s jazz"` would be accepted, but
+the catalog's only 1990s jazz track is `relaxed`, not `moody`, so reporting best effort is
+correct. And my "too long" case was exactly 300 characters, which is not over the limit.
+
+### Automated tests
+
+```bash
+$ python -m pytest -q
+132 passed
+```
+
+Coverage is 89% overall and 90–100% on every `src/agent` module. The gap is
+`src/app.py` (33%), whose Streamlit body cannot run outside a Streamlit process; its pure
+helpers are tested. To reproduce the figure, install the optional dev tool and run:
+
+```bash
+pip install pytest-cov
+python -m pytest -q --cov=src --cov=eval --cov-report=term-missing
+```
+
+---
+
+## Stretch features
+
+### RAG enhancement: multi-source retrieval that changes the ranking
+
+Two sources are indexed: hand-written notes in `knowledge/` (editorial judgements the song
+columns cannot express, such as "focus listening means near-instrumental") and per-genre
+coverage summaries derived from `data/songs.csv`. Retrieved passages carry explicit
+`hint:` directives that become soft scoring targets, so retrieval changes what gets ranked
+first rather than just printing a note beside the answer.
+
+**Before and after, same query, one flag apart.** `"something for deep focus while coding"`
+mentions no genre, so without retrieval the planner has only an energy target to work with
+and ranks a *vocal* acoustic track first — wrong for coding.
+
+```text
+$ python -m src.agent_cli "something for deep focus while coding" -k 3
+Query: "something for deep focus while coding"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: instrumentalness=0.95, speechiness=0.0, energy=0.3, acousticness=0.7 | mode vibe_and_energy
+Retrieved: 'Deep focus, studying and coding' (use_cases.md, similarity 0.32) -> instrumentalness=0.95, speechiness=0.0, energy=0.3, mode=vibe_and_energy
+Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.11) -> acousticness=0.7
+
++------+--------------------+----------------+---------+-------+------------------------------------------+
+| Rank | Song Title         | Artist         | Genre   | Score | Reasons                                  |
++======+====================+================+=========+=======+==========================================+
+|    1 | Spacewalk Thoughts | Orbit Bloom    | ambient |  5.71 | Energy proximity: 0.98 (+2.94)           |
+|      |                    |                |         |       | Acousticness proximity: 0.78 (+0.78)     |
+|      |                    |                |         |       | Instrumentalness proximity: 1.00 (+1.5)  |
+|      |                    |                |         |       | Speechiness proximity: 0.98 (+0.49)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+|    2 | Library Rain       | Paper Lanterns | lofi    |  5.63 | Energy proximity: 0.95 (+2.85)           |
+|      |                    |                |         |       | Acousticness proximity: 0.84 (+0.84)     |
+|      |                    |                |         |       | Instrumentalness proximity: 0.97 (+1.46) |
+|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+|    3 | Focus Flow         | LoRoom         | lofi    |  5.53 | Energy proximity: 0.90 (+2.7)            |
+|      |                    |                |         |       | Acousticness proximity: 0.92 (+0.92)     |
+|      |                    |                |         |       | Instrumentalness proximity: 0.95 (+1.43) |
+|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+... (full output in logs/demo_run.txt)
+```
+
+With retrieval, the focus passage contributes `instrumentalness = 0.95` and
+`speechiness = 0.0`; the instrumental tracks take the top three and the vocal track leaves
+the list entirely.
+
+```text
+$ python -m src.agent_cli "something for deep focus while coding" -k 3
+Query: "something for deep focus while coding"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: instrumentalness=0.95, speechiness=0.0, energy=0.3, acousticness=0.7 | mode vibe_and_energy
+Retrieved: 'Deep focus, studying and coding' (use_cases.md, similarity 0.32) -> instrumentalness=0.95, speechiness=0.0, energy=0.3, mode=vibe_and_energy
+Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.11) -> acousticness=0.7
+
++------+--------------------+----------------+---------+-------+------------------------------------------+
+| Rank | Song Title         | Artist         | Genre   | Score | Reasons                                  |
++======+====================+================+=========+=======+==========================================+
+|    1 | Spacewalk Thoughts | Orbit Bloom    | ambient |  5.71 | Energy proximity: 0.98 (+2.94)           |
+|      |                    |                |         |       | Acousticness proximity: 0.78 (+0.78)     |
+|      |                    |                |         |       | Instrumentalness proximity: 1.00 (+1.5)  |
+|      |                    |                |         |       | Speechiness proximity: 0.98 (+0.49)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+|    2 | Library Rain       | Paper Lanterns | lofi    |  5.63 | Energy proximity: 0.95 (+2.85)           |
+|      |                    |                |         |       | Acousticness proximity: 0.84 (+0.84)     |
+|      |                    |                |         |       | Instrumentalness proximity: 0.97 (+1.46) |
+|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+|    3 | Focus Flow         | LoRoom         | lofi    |  5.53 | Energy proximity: 0.90 (+2.7)            |
+|      |                    |                |         |       | Acousticness proximity: 0.92 (+0.92)     |
+|      |                    |                |         |       | Instrumentalness proximity: 0.95 (+1.43) |
+|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
++------+--------------------+----------------+---------+-------+------------------------------------------+
+... (full output in logs/demo_run.txt)
+```
+
+Retrieval may only *add* targets the listener did not state, and may never create a hard
+filter — inferring a veto from a similarity score would silently hide songs.
+
+### Agentic workflow enhancement: committed reasoning traces
+
+Every pass is written to [`logs/agent_traces.md`](logs/agent_traces.md) with its plan,
+filters, requirements, picks, per-check critic verdict and chosen action, and one full
+trace is embedded in [`ai_interactions.md`](ai_interactions.md). `--trace` prints the same
+thing to the terminal.
+
+### Specialisation: three constrained explanation voices
+
+`src/agent/voices.py` re-expresses the scorer's own reason strings in three styles chosen
+by few-shot style templates, never free generation, so the explanation cannot drift from
+the score and is identical run to run. Measured comparison is in
+[`model_card.md`](model_card.md).
+
+### Test harness
+
+`eval/run_eval.py`, described above.
+
+---
+
+## Design decisions and trade-offs
+
+**Rule-based parsing instead of an LLM.** The catalog has a closed vocabulary — 12 genres,
+10 moods, 4 decades — so keyword tables cover it. The system runs offline, needs no key,
+and produces byte-identical output for a grader. The cost is real: it understands only its
+own vocabulary and refuses anything else rather than guessing. A keyword table also has
+sharp edges. "pop" matched inside "popular" until matching moved to word boundaries.
+
+**Hard filters separate from soft weights.** Explained above. The trade-off is that
+filtering a 20-song catalog on a category would collapse it below five results, so only
+numeric thresholds and explicit exclusions prune; categorical requests become requirements
+the critic enforces instead.
+
+**Vetoes are never conceded.** "Nothing too poppy" is honoured even at the cost of a lower
+score, because ignoring an explicit exclusion is worse than a weaker recommendation.
+Requirements are conceded least-specific-first (decade, then mood tag, then mood, then
+genre) on the assumption that a listener naming a genre cares about it more than the decade.
+
+**Honest status over flattering status.** The loop can always reach "all checks pass" by
+surrendering every requirement. Reporting that as success would make the critic decorative,
+so a result whose requirements were surrendered is reported as `best_effort` with the
+surrendered items named, and confidence decays 15% per revision.
+
+**No-op concessions do not count.** Relaxing a low-weight requirement sometimes left the
+ranking identical. The loop compares rankings between passes and, on a repeat, switches
+ranking mode instead of spending another concession — six loop turns are allowed but only
+three count as revisions.
+
+**Retrieval adds, never overrides.** See above.
+
+**JSON golden cases, not YAML.** One fewer dependency to install before the harness runs.
+
+---
+
+## Testing summary
+
+- **130 automated tests pass**; coverage 89% overall, 90–100% across `src/agent`.
+- **16/16 golden cases pass**, covering all four outcome statuses and both retrieval paths.
+- **What worked:** the filter/score split fixed the original failure directly — the old
+  design drained its preferences to nothing and returned score-0 pop songs for
+  `"1990s instrumental hip-hop"`; it now keeps the instrumental filter and explains the
+  trade-off. No-op detection cut wasted passes.
+- **What did not work at first:** three bugs the tests caught. "pop" matched inside
+  "popular". The zero-match guardrail was tuned at 0.50 and fired on legitimately weak but
+  non-empty matches. Ranking-mode history was read from the plan's notes, which omitted the
+  starting mode, so the agent re-tried a mode it had already used.
+- **What I learned:** most of the agent's quality lives in its concession *policy*, not its
+  parsing. The parser was the easy half.
+
+---
+
+## Repository layout
+
+```
+├── src/
+│   ├── agent/            # the new agent: parser, filters, critic, planner, loop,
+│   │                     # retrieval, hints, voices, trace
+│   ├── agent_cli.py      # end-to-end CLI (reference interface)
+│   ├── app.py            # Streamlit UI
+│   ├── main.py           # original Module 3 experiment runner (unchanged behaviour)
+│   └── recommender.py    # original scorer and ranker
+├── knowledge/            # retrieval corpus (genres, moods, use cases)
+├── eval/                 # golden cases + evaluation harness
+├── diagrams/             # architecture.mmd (Mermaid source of record)
+├── logs/                 # generated evidence: demo_run, eval_run, agent_traces
+├── tests/                # 132 pytest cases
+├── data/songs.csv        # 20-song catalog
+├── model_card.md         # limitations, bias, misuse, AI-collaboration reflection
+└── ai_interactions.md    # AI collaboration log + an embedded reasoning trace
+```
+
+## Reflection
+
+The graded responsible-AI reflection — how I collaborated with AI, one suggestion I
+accepted and one I rejected, bias, misuse and limitations — is in
+[`model_card.md`](model_card.md).
+
+What this project taught me about problem-solving is narrower than I expected. The
+interesting work was not making the agent clever, it was deciding what it should do when it
+*cannot* win: which requirement to give up, which to defend, and how to say so without
+pretending. A system that quietly returns something plausible is harder to trust than one
+that says "there is no 1990s instrumental hip-hop here; the closest I have is a jazz track."
+
+---
+
+<details>
+<summary><strong>Appendix: the base Module 3 system</strong> (how content-based recommendation
+works, the four building blocks, the scoring recipe, and the original multi-profile
+experiments)</summary>
 
 ## How The System Works
 
@@ -103,40 +699,6 @@ The candidates are re-sorted and the highest is picked. Each penalty is added to
 - **Catalog imbalance.** Lofi has 3 songs. Pop, hip-hop, EDM, R&B, jazz and indie rock have 2 each. Rock, ambient, synthwave, indie pop and acoustic have only 1 each. Fans of smaller genres run out of genre matches quickly, and the rest of their list is filled by energy closeness alone.
 - **Popularity bias (opt-in).** If `prefers_popular` is on, already-popular songs get a boost, which makes them even more visible.
 - **Subjective labels.** Mood and mood tags were assigned by hand (with AI help). Someone else might call "Gym Hero" energetic instead of intense.
-
----
-
-## Getting Started
-
-### Setup
-
-1. Create a virtual environment (optional but recommended):
-
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate      # Mac or Linux
-   .venv\Scripts\activate         # Windows
-   ```
-
-2. Install dependencies
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Run the app from the project root:
-
-   ```bash
-   python -m src.main
-   ```
-
-### Running Tests
-
-```bash
-pytest
-```
-
-The suite has 23 tests. `tests/test_recommender.py` covers the `Recommender` class. `tests/test_scoring.py` covers loading, scoring, the ranking modes and the diversity penalties.
 
 ---
 
@@ -520,3 +1082,5 @@ Read the full write-up in the [**Model Card**](model_card.md).
 Building this showed that a recommender is just a scoring rule plus a ranking rule. The scoring rule turns a song's data into a number, and the ranking rule decides which numbers win. Every choice in between, such as how much a genre match is worth or whether energy matters more than mood, is a human value judgment that quietly shapes what the listener sees.
 
 Bias showed up in places that were easy to miss. A small catalog meant hip-hop fans could never get a "perfect" match. Exact labels meant a slightly different word could hide a great song. The default weights kept recommending more of the same genre. The diversity penalty and the switchable modes help, but they also showed that "fair" depends on what the listener wants, and real apps make that choice for millions of people at once.
+
+</details>

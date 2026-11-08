@@ -50,7 +50,7 @@ Trace appended to logs/agent_traces.md
 
 $ python -m src.agent_cli "chill acoustic 90s stuff for studying, nothing too poppy" --trace
 Query: "chill acoustic 90s stuff for studying, nothing too poppy"
-Status: BEST EFFORT | confidence 0.85 | 1 revision(s) | 5 pass(es)
+Status: BEST EFFORT | confidence 0.42 | 1 revision(s) | 5 pass(es)
 Agent: Best effort: the catalog has nothing matching mood = chill, release decade = 1990s, so that part of the request was given up. Everything else still holds.
 Final plan: acousticness=0.7, instrumentalness=0.1, genre=acoustic, energy=0.3 | mode genre_first
 Retrieved: 'acoustic in this catalog' (data/songs.csv, similarity 0.18) -> no usable hints
@@ -90,8 +90,8 @@ Why these (plain voice):
 
 ## Query: "chill acoustic 90s stuff for studying, nothing too poppy"
 
-- Recorded: 2026-11-06 01:25:19Z
-- Status: **best_effort** (confidence 0.85, 1 revision(s))
+- Recorded: 2026-11-06 01:30:24Z
+- Status: **best_effort** (confidence 0.42, 1 revision(s))
 - Outcome: Best effort: the catalog has nothing matching mood = chill, release decade = 1990s, so that part of the request was given up. Everything else still holds.
 - Surrendered: mood = chill, release decade = 1990s
 
@@ -145,7 +145,7 @@ Trace appended to logs/agent_traces.md
 
 $ python -m src.agent_cli "1990s instrumental hip-hop" --voice critic
 Query: "1990s instrumental hip-hop"
-Status: BEST EFFORT | confidence 0.52 | 1 revision(s) | 2 pass(es)
+Status: BEST EFFORT | confidence 0.35 | 1 revision(s) | 2 pass(es)
 Agent: Best effort: the catalog has nothing matching genre = hip-hop, so that part of the request was given up. Everything else still holds.
 Final plan: speechiness=0.25, danceability=0.8, release_decade=1990s | mode genre_first
 Retrieved: 'hip-hop in this catalog' (data/songs.csv, similarity 0.49) -> no usable hints
