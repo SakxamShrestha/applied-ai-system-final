@@ -18,14 +18,20 @@ TOKEN_PATTERN = re.compile(r"[a-z0-9&\-]+")
 HINT_PATTERN = re.compile(r"^-\s*hint:\s*(?P<field>[a-z_]+)\s*=\s*(?P<value>.+?)\s*$", re.MULTILINE)
 SECTION_PATTERN = re.compile(r"^##\s+(?P<title>.+?)\s*$", re.MULTILINE)
 
-# Similarity below this is treated as "the corpus has nothing to say".
-MIN_SIMILARITY = 0.05
+# Similarity below this is treated as "the corpus has nothing to say". Raised from 0.05
+# after a *high energy* query retrieved the "Chill, relaxed and calm" passage at 0.08 and
+# injected an acousticness target that worked against the request.
+MIN_SIMILARITY = 0.10
 DEFAULT_TOP_K = 3
 STOPWORDS = frozenset(
     """a an and are as at be but by for from has have in is it its of on or
     that the their them these this to too with without you your not no are
     more most than then they when while which who how what why
-    music song songs track tracks listener listeners listening""".split()
+    music song songs track tracks listener listeners listening
+    something anything someone somebody stuff thing things some any
+    want wants wanted need needs give get put find looking look
+    me my i you your it is are was were do does did can could would
+    here there about into over under out up down""".split()
 )
 
 

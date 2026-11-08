@@ -43,8 +43,9 @@ weight at all, so no request could act on them.
 | **Revision policy** | Concedes the cheapest thing first; never concedes an explicit veto | `src/agent/planner.py` |
 | **Knowledge retrieval (RAG)** | Pure-Python TF-IDF over hand-written notes plus catalog-derived facts, feeding the planner | `src/agent/knowledge.py`, `src/agent/hints.py` |
 | **Explanation voices** | Three constrained styles over the scorer's own reasons | `src/agent/voices.py` |
-| **Evaluation harness** | 16 golden cases asserting behaviour, with a pass/fail summary and non-zero exit on regression | `eval/run_eval.py` |
+| **Evaluation harness** | 20 golden cases asserting behaviour, with a pass/fail summary and non-zero exit on regression | `eval/run_eval.py` |
 | **Reasoning traces** | Every pass written to a committed log | `src/agent/trace.py`, `logs/agent_traces.md` |
+| **Saved taste profile** | Background preferences the agent carries into every query, with vetoes it will not concede | `src/agent/profile.py` |
 | **Interfaces** | CLI (reference) and a Streamlit page | `src/agent_cli.py`, `src/app.py` |
 
 The original scorer and ranker (`score_song`, `recommend_songs`) are still the engine; the
@@ -82,6 +83,7 @@ flowchart TD
     end
     Q --> IDX
     IDX -->|"hints -> soft targets only"| P
+    PROF["profiles/me.json<br/>saved taste: genres · energy · vetoes"] -->|"background preferences;<br/>the query always wins"| P
 
     OUT["AgentResult<br/>status · top-k · confidence · passes"] --> VOICE["EXPLAIN<br/>plain | dj | critic"]
     VOICE --> UI["ASCII table / dataframe"]
@@ -91,7 +93,7 @@ flowchart TD
 
     subgraph EVAL["Checking"]
         GS["eval/golden_queries.json"] --> H["eval/run_eval.py"]
-        TESTS["tests/ — 132 pytest cases"] --> H
+        TESTS["tests/ — 148 pytest cases"] --> H
     end
     OUT -.-> H
 ```
@@ -141,8 +143,8 @@ vocabulary of its own catalog.
 Verify the install:
 
 ```bash
-python -m pytest -q          # 132 tests
-python eval/run_eval.py      # 16 golden cases, exits non-zero on regression
+python -m pytest -q          # 148 tests
+python eval/run_eval.py      # 20 golden cases, exits non-zero on regression
 ```
 
 ---
@@ -155,6 +157,8 @@ python -m src.agent_cli "chill lofi for studying"
 # options
 python -m src.agent_cli "QUERY" --trace          # print the full reasoning trace
 python -m src.agent_cli "QUERY" --voice critic   # plain (default) | dj | critic
+python -m src.agent_cli "QUERY" --me             # apply your saved taste profile
+python -m src.agent_cli "QUERY" --profile PATH   # apply a specific profile file
 python -m src.agent_cli "QUERY" --no-rag         # skip knowledge retrieval
 python -m src.agent_cli "QUERY" --mode balanced  # force a ranking mode
 python -m src.agent_cli "QUERY" -k 3             # how many songs
@@ -165,7 +169,8 @@ python -m src.main                               # the original Module 3 experim
 ```
 
 Exit codes: `0` answered (accepted or best effort), `1` catalog could not be loaded,
-`2` query refused by the guardrail, `3` request infeasible against this catalog.
+`2` query refused by the guardrail, `3` request infeasible against this catalog,
+`4` profile file missing or invalid.
 
 Every run appends its reasoning trace to `logs/agent_traces.md`, which is append-only by
 design so a session's history survives.
@@ -185,32 +190,32 @@ $ python -m src.agent_cli "high energy hip hop to hype me up" -k 5
 Query: "high energy hip hop to hype me up"
 Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
 Agent: Every requirement in the query was satisfied on the first attempt.
-Final plan: energy=0.9, danceability=0.85, tempo_bpm=150.0, acousticness=0.6, genre=hip-hop | mode vibe_and_energy
-Retrieved: 'Workouts, gym sessions and hype' (use_cases.md, similarity 0.10) -> energy=0.9, danceability=0.85, tempo_bpm=150.0, mode=vibe_and_energy
-Retrieved: 'Chill, relaxed and calm' (moods.md, similarity 0.07) -> acousticness=0.6
+Final plan: energy=0.9, danceability=0.85, tempo_bpm=150.0, genre=hip-hop | mode vibe_and_energy
+Retrieved: 'Workouts, gym sessions and hype' (use_cases.md, similarity 0.13) -> energy=0.9, danceability=0.85, tempo_bpm=150.0, mode=vibe_and_energy
 
-+------+----------------+---------------+-----------+-------+--------------------------------------+
-| Rank | Song Title     | Artist        | Genre     | Score | Reasons                              |
-+======+================+===============+===========+=======+======================================+
-|    1 | Concrete Crown | Blockline     | hip-hop   |  5.70 | Genre match: hip-hop (+0.75)         |
-|      |                |               |           |       | Energy proximity: 0.88 (+2.64)       |
-|      |                |               |           |       | Danceability proximity: 1.00 (+1.5)  |
-|      |                |               |           |       | Acousticness proximity: 0.48 (+0.48) |
-|      |                |               |           |       | Tempo proximity: 0.44 (+0.33)        |
-+------+----------------+---------------+-----------+-------+--------------------------------------+
-|    2 | Gym Hero       | Max Pulse     | pop       |  5.43 | Energy proximity: 0.97 (+2.91)       |
-|      |                |               |           |       | Danceability proximity: 0.97 (+1.46) |
-|      |                |               |           |       | Acousticness proximity: 0.45 (+0.45) |
-|      |                |               |           |       | Tempo proximity: 0.82 (+0.61)        |
-+------+----------------+---------------+-----------+-------+--------------------------------------+
-|    3 | Storm Runner   | Voltline      | rock      |  5.42 | Energy proximity: 0.99 (+2.97)       |
-|      |                |               |           |       | Danceability proximity: 0.81 (+1.22) |
-|      |                |               |           |       | Acousticness proximity: 0.50 (+0.5)  |
-|      |                |               |           |       | Tempo proximity: 0.98 (+0.73)        |
-+------+----------------+---------------+-----------+-------+--------------------------------------+
-|    4 | Drop Zone      | Kilowatt Kids | edm       |  5.37 | Energy proximity: 0.93 (+2.79)       |
-|      |                |               |           |       | Danceability proximity: 0.99 (+1.48) |
-|      |                |               |           |       | Acousticness proximity: 0.42 (+0.42) |
++------+-------------+---------------+---------+-------+--------------------------------------+
+| Rank | Song Title  | Artist        | Genre   | Score | Reasons                              |
++======+=============+===============+=========+=======+======================================+
+|    1 | Stronger    | Kanye West    | hip-hop |  5.40 | Genre match: hip-hop (+0.75)         |
+|      |             |               |         |       | Energy proximity: 0.95 (+2.85)       |
+|      |             |               |         |       | Danceability proximity: 0.93 (+1.4)  |
+|      |             |               |         |       | Tempo proximity: 0.54 (+0.41)        |
++------+-------------+---------------+---------+-------+--------------------------------------+
+|    2 | Best Friend | Young Thug    | hip-hop |  5.40 | Genre match: hip-hop (+0.75)         |
+|      |             |               |         |       | Energy proximity: 0.84 (+2.52)       |
+|      |             |               |         |       | Danceability proximity: 0.97 (+1.46) |
+|      |             |               |         |       | Tempo proximity: 0.90 (+0.68)        |
++------+-------------+---------------+---------+-------+--------------------------------------+
+|    3 | Gym Hero    | Max Pulse     | pop     |  4.98 | Energy proximity: 0.97 (+2.91)       |
+|      |             |               |         |       | Danceability proximity: 0.97 (+1.46) |
+|      |             |               |         |       | Tempo proximity: 0.82 (+0.61)        |
++------+-------------+---------------+---------+-------+--------------------------------------+
+|    4 | Drop Zone   | Kilowatt Kids | edm     |  4.95 | Energy proximity: 0.93 (+2.79)       |
+|      |             |               |         |       | Danceability proximity: 0.99 (+1.48) |
+|      |             |               |         |       | Tempo proximity: 0.90 (+0.68)        |
++------+-------------+---------------+---------+-------+--------------------------------------+
+|    5 | Idol        | YOASOBI       | j-pop   |  4.93 | Energy proximity: 1.00 (+3.0)        |
+|      |             |               |         |       | Danceability proximity: 0.87 (+1.3)  |
 ... (full output in logs/demo_run.txt)
 ```
 
@@ -227,45 +232,41 @@ Query: "chill acoustic 90s stuff for studying, nothing too poppy"
 Status: BEST EFFORT | confidence 0.42 | 1 revision(s) | 5 pass(es)
 Agent: Best effort: the catalog has nothing matching mood = chill, release decade = 1990s, so that part of the request was given up. Everything else still holds.
 Final plan: acousticness=0.7, instrumentalness=0.1, genre=acoustic, energy=0.3 | mode genre_first
-Retrieved: 'acoustic in this catalog' (data/songs.csv, similarity 0.18) -> no usable hints
-Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.12) -> acousticness=0.7, instrumentalness=0.1
+Retrieved: 'acoustic in this catalog' (data/songs.csv, similarity 0.20) -> no usable hints
+Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.15) -> acousticness=0.7, instrumentalness=0.1
 
 
 ### Reasoning trace
 
-- **Pass 1** — mode `vibe_and_energy`, 18 song(s) survived the filter stage
+- **Pass 1** — mode `vibe_and_energy`, 29 song(s) survived the filter stage
     - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, release_decade=1990s, energy=0.3
     - FILTERS: exclude genre pop
     - REQUIREMENTS: genre = acoustic; mood = chill; release decade = 1990s
-    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Jaba Jaba Mutu Bhitra (5.37)
     - CRITIC: 5/7 checks passed, confidence 0.67
     - PROBLEMS: top pick has mood='relaxed', wanted 'chill'; top pick has release_decade='2000s', wanted '1990s'
     - ACTION: revise: relaxed release decade = 1990s
-- **Pass 2** — mode `vibe_and_energy`, 18 song(s) survived the filter stage
+- **Pass 2** — mode `vibe_and_energy`, 29 song(s) survived the filter stage
     - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
     - FILTERS: exclude genre pop
     - REQUIREMENTS: genre = acoustic; mood = chill
-    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Slow Burn Text (4.53)
+    - ACT: Porch Light Letters (5.98), Midnight Coding (5.96), Library Rain (5.96), Spacewalk Thoughts (5.95), Jaba Jaba Mutu Bhitra (5.37)
     - CRITIC: 5/6 checks passed, confidence 0.64
     - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
     - ACTION: no-op concession, trying next: switched ranking mode to balanced
-- **Pass 3** — mode `balanced`, 18 song(s) survived the filter stage
+- **Pass 3** — mode `balanced`, 29 song(s) survived the filter stage
     - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
     - FILTERS: exclude genre pop
     - REQUIREMENTS: genre = acoustic; mood = chill
-    - ACT: Porch Light Letters (5.24), Midnight Coding (4.03), Library Rain (3.94), Spacewalk Thoughts (3.90), Slow Burn Text (2.84)
+    - ACT: Porch Light Letters (5.24), Midnight Coding (4.03), Library Rain (3.94), Spacewalk Thoughts (3.90), Jaba Jaba Mutu Bhitra (3.40)
     - CRITIC: 5/6 checks passed, confidence 0.64
     - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
     - ACTION: no-op concession, trying next: switched ranking mode to genre_first
-- **Pass 4** — mode `genre_first`, 18 song(s) survived the filter stage
+- **Pass 4** — mode `genre_first`, 29 song(s) survived the filter stage
     - PLAN: acousticness=0.7, instrumentalness=0.1, genre=acoustic, mood=chill, energy=0.3
     - FILTERS: exclude genre pop
     - REQUIREMENTS: genre = acoustic; mood = chill
-    - ACT: Porch Light Letters (5.87), Midnight Coding (2.48), Library Rain (2.46), Spacewalk Thoughts (2.44), Slow Burn Text (1.62)
-    - CRITIC: 5/6 checks passed, confidence 0.64
-    - PROBLEMS: top pick has mood='relaxed', wanted 'chill'
-    - ACTION: no-op concession, trying next: relaxed mood = chill
-- **Pass 5** — mode `genre_first`, 18 song(s) survived the filter stage
+    - ACT: Porch Light Letters (5.87), Midnight Coding (2.48), Library Rain (2.46), Spacewalk Thoughts (2.44), Jaba Jaba Mutu Bhitra (1.95)
 ... (full trace in logs/agent_traces.md)
 ```
 
@@ -275,7 +276,7 @@ Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.12) -> 
 $ python -m src.agent_cli "instrumental lyrical music"
 Query: "instrumental lyrical music"
 Status: INFEASIBLE | confidence 0.00 | 0 revision(s) | 0 pass(es)
-Agent: No song in the catalog satisfies every hard requirement: speechiness at least 0.1 (removes 17 of 20); instrumentalness at least 0.5 (removes 12 of 20). Closest available: Blue Note Taxi (jazz, fails speechiness at least 0.1); Coffee Shop Stories (jazz, fails speechiness at least 0.1). Relax one of those requirements and ask again.
+Agent: No song in the catalog satisfies every hard requirement: speechiness at least 0.1 (removes 24 of 31); instrumentalness at least 0.5 (removes 23 of 31). Closest available: Best Friend (hip-hop, fails instrumentalness at least 0.5); Blue Note Taxi (jazz, fails speechiness at least 0.1). Relax one of those requirements and ask again.
 
 Trace appended to logs/agent_traces.md
 [exit code: 3]
@@ -293,8 +294,8 @@ Query: "1990s instrumental hip-hop"
 Status: BEST EFFORT | confidence 0.35 | 1 revision(s) | 2 pass(es)
 Agent: Best effort: the catalog has nothing matching genre = hip-hop, so that part of the request was given up. Everything else still holds.
 Final plan: speechiness=0.25, danceability=0.8, release_decade=1990s | mode genre_first
-Retrieved: 'hip-hop in this catalog' (data/songs.csv, similarity 0.49) -> no usable hints
-Retrieved: 'Hip-hop and rap' (genres.md, similarity 0.37) -> speechiness=0.25, danceability=0.8
+Retrieved: 'hip-hop in this catalog' (data/songs.csv, similarity 0.44) -> no usable hints
+Retrieved: 'Hip-hop and rap' (genres.md, similarity 0.36) -> speechiness=0.25, danceability=0.8
 
 +------+---------------------+---------------+-----------+-------+--------------------------------------+
 | Rank | Song Title          | Artist        | Genre     | Score | Reasons                              |
@@ -326,7 +327,7 @@ Four mechanisms, each visible in the output above.
 | **Input guardrail** | Empty, over-300-character or unrecognisable queries are refused with examples, exit code 2 | Cases 5–6 below |
 | **Hard-constraint filter** | A stated threshold or exclusion prunes the catalog; an empty result is reported as infeasible with the blocking constraint named | Sample interaction 3 |
 | **Self-critique + honest status** | Every check is reported; acceptance reached only by surrendering requirements is reported as `best_effort`, never `accepted` | Sample interactions 2 and 4 |
-| **Evaluation harness** | 16 golden cases assert status, revision bounds, confidence floors, forbidden genres and per-field thresholds | Table below |
+| **Evaluation harness** | 20 golden cases assert status, revision bounds, confidence floors, forbidden genres and per-field thresholds | Table below |
 
 ### Guardrail behaviour
 
@@ -375,26 +376,26 @@ Status: ACCEPTED | confidence 0.80 | 0 revision(s) | 1 pass(es)
 Agent: Every requirement in the query was satisfied on the first attempt.
 Final plan: energy=0.3 | mode vibe_and_energy
 
-+------+---------------------+----------------+----------+-------+--------------------------------+
-| Rank | Song Title          | Artist         | Genre    | Score | Reasons                        |
-+======+=====================+================+==========+=======+================================+
-|    1 | Porch Light Letters | Willow & Pine  | acoustic |  3.00 | Energy proximity: 1.00 (+3.0)  |
-+------+---------------------+----------------+----------+-------+--------------------------------+
-|    2 | Spacewalk Thoughts  | Orbit Bloom    | ambient  |  2.94 | Energy proximity: 0.98 (+2.94) |
-+------+---------------------+----------------+----------+-------+--------------------------------+
-|    3 | Library Rain        | Paper Lanterns | lofi     |  2.85 | Energy proximity: 0.95 (+2.85) |
-+------+---------------------+----------------+----------+-------+--------------------------------+
++------+-----------------------+---------------+----------+-------+--------------------------------+
+| Rank | Song Title            | Artist        | Genre    | Score | Reasons                        |
++======+=======================+===============+==========+=======+================================+
+|    1 | Porch Light Letters   | Willow & Pine | acoustic |  3.00 | Energy proximity: 1.00 (+3.0)  |
++------+-----------------------+---------------+----------+-------+--------------------------------+
+|    2 | Jaba Jaba Mutu Bhitra | Arun Thapa    | nepali   |  3.00 | Energy proximity: 1.00 (+3.0)  |
++------+-----------------------+---------------+----------+-------+--------------------------------+
+|    3 | Spacewalk Thoughts    | Orbit Bloom   | ambient  |  2.94 | Energy proximity: 0.98 (+2.94) |
++------+-----------------------+---------------+----------+-------+--------------------------------+
 
 Why these (plain voice):
   1. Porch Light Letters: the energy is close to your target.
-  2. Spacewalk Thoughts: the energy is close to your target.
-  3. Library Rain: the energy is close to your target.
+  2. Jaba Jaba Mutu Bhitra: the energy is close to your target.
+  3. Spacewalk Thoughts: the energy is close to your target.
 
 Trace appended to logs/agent_traces.md
 ... (full output in logs/demo_run.txt)
 ```
 
-Mean confidence of 0.52 across the suite is low on purpose: a third of the cases are
+Mean confidence of 0.62 across the suite is low on purpose: a third of the cases are
 guardrail refusals and deliberate near-misses that *should* score 0.00.
 
 Writing this harness paid for itself immediately — two of my own expectations were wrong
@@ -406,7 +407,7 @@ correct. And my "too long" case was exactly 300 characters, which is not over th
 
 ```bash
 $ python -m pytest -q
-132 passed
+148 passed
 ```
 
 Coverage is 89% overall and 90–100% on every `src/agent` module. The gap is
@@ -437,30 +438,30 @@ and ranks a *vocal* acoustic track first — wrong for coding.
 ```text
 $ python -m src.agent_cli "something for deep focus while coding" -k 3
 Query: "something for deep focus while coding"
-Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Status: ACCEPTED | confidence 0.99 | 0 revision(s) | 1 pass(es)
 Agent: Every requirement in the query was satisfied on the first attempt.
-Final plan: instrumentalness=0.95, speechiness=0.0, energy=0.3, acousticness=0.7 | mode vibe_and_energy
-Retrieved: 'Deep focus, studying and coding' (use_cases.md, similarity 0.32) -> instrumentalness=0.95, speechiness=0.0, energy=0.3, mode=vibe_and_energy
-Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.11) -> acousticness=0.7
+Final plan: instrumentalness=0.95, speechiness=0.0, energy=0.3 | mode vibe_and_energy
+Retrieved: 'Deep focus, studying and coding' (use_cases.md, similarity 0.39) -> instrumentalness=0.95, speechiness=0.0, energy=0.3, mode=vibe_and_energy
 
 +------+--------------------+----------------+---------+-------+------------------------------------------+
 | Rank | Song Title         | Artist         | Genre   | Score | Reasons                                  |
 +======+====================+================+=========+=======+==========================================+
-|    1 | Spacewalk Thoughts | Orbit Bloom    | ambient |  5.71 | Energy proximity: 0.98 (+2.94)           |
-|      |                    |                |         |       | Acousticness proximity: 0.78 (+0.78)     |
+|    1 | Spacewalk Thoughts | Orbit Bloom    | ambient |  4.93 | Energy proximity: 0.98 (+2.94)           |
 |      |                    |                |         |       | Instrumentalness proximity: 1.00 (+1.5)  |
 |      |                    |                |         |       | Speechiness proximity: 0.98 (+0.49)      |
 +------+--------------------+----------------+---------+-------+------------------------------------------+
-|    2 | Library Rain       | Paper Lanterns | lofi    |  5.63 | Energy proximity: 0.95 (+2.85)           |
-|      |                    |                |         |       | Acousticness proximity: 0.84 (+0.84)     |
+|    2 | Library Rain       | Paper Lanterns | lofi    |  4.79 | Energy proximity: 0.95 (+2.85)           |
 |      |                    |                |         |       | Instrumentalness proximity: 0.97 (+1.46) |
 |      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
 +------+--------------------+----------------+---------+-------+------------------------------------------+
-|    3 | Focus Flow         | LoRoom         | lofi    |  5.53 | Energy proximity: 0.90 (+2.7)            |
-|      |                    |                |         |       | Acousticness proximity: 0.92 (+0.92)     |
+|    3 | Focus Flow         | LoRoom         | lofi    |  4.61 | Energy proximity: 0.90 (+2.7)            |
 |      |                    |                |         |       | Instrumentalness proximity: 0.95 (+1.43) |
 |      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
 +------+--------------------+----------------+---------+-------+------------------------------------------+
+
+Why these (plain voice):
+  1. Spacewalk Thoughts: the energy is close to your target, there is little or no singing and it is sung rather than spoken.
+  2. Library Rain: the energy is close to your target, there is little or no singing and it is sung rather than spoken.
 ... (full output in logs/demo_run.txt)
 ```
 
@@ -469,37 +470,173 @@ With retrieval, the focus passage contributes `instrumentalness = 0.95` and
 the list entirely.
 
 ```text
-$ python -m src.agent_cli "something for deep focus while coding" -k 3
-Query: "something for deep focus while coding"
-Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
-Agent: Every requirement in the query was satisfied on the first attempt.
-Final plan: instrumentalness=0.95, speechiness=0.0, energy=0.3, acousticness=0.7 | mode vibe_and_energy
-Retrieved: 'Deep focus, studying and coding' (use_cases.md, similarity 0.32) -> instrumentalness=0.95, speechiness=0.0, energy=0.3, mode=vibe_and_energy
-Retrieved: 'Acoustic, indie rock and indie pop' (genres.md, similarity 0.11) -> acousticness=0.7
+$ python eval/run_eval.py
+Agent evaluation harness — 20 cases, catalog of 31 songs
 
-+------+--------------------+----------------+---------+-------+------------------------------------------+
-| Rank | Song Title         | Artist         | Genre   | Score | Reasons                                  |
-+======+====================+================+=========+=======+==========================================+
-|    1 | Spacewalk Thoughts | Orbit Bloom    | ambient |  5.71 | Energy proximity: 0.98 (+2.94)           |
-|      |                    |                |         |       | Acousticness proximity: 0.78 (+0.78)     |
-|      |                    |                |         |       | Instrumentalness proximity: 1.00 (+1.5)  |
-|      |                    |                |         |       | Speechiness proximity: 0.98 (+0.49)      |
-+------+--------------------+----------------+---------+-------+------------------------------------------+
-|    2 | Library Rain       | Paper Lanterns | lofi    |  5.63 | Energy proximity: 0.95 (+2.85)           |
-|      |                    |                |         |       | Acousticness proximity: 0.84 (+0.84)     |
-|      |                    |                |         |       | Instrumentalness proximity: 0.97 (+1.46) |
-|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
-+------+--------------------+----------------+---------+-------+------------------------------------------+
-|    3 | Focus Flow         | LoRoom         | lofi    |  5.53 | Energy proximity: 0.90 (+2.7)            |
-|      |                    |                |         |       | Acousticness proximity: 0.92 (+0.92)     |
-|      |                    |                |         |       | Instrumentalness proximity: 0.95 (+1.43) |
-|      |                    |                |         |       | Speechiness proximity: 0.97 (+0.48)      |
-+------+--------------------+----------------+---------+-------+------------------------------------------+
-... (full output in logs/demo_run.txt)
+Case                                          RAG  Profile  Status       Expected     Conf  Rev  Result
+--------------------------------------------  ---  -------  -----------  -----------  ----  ---  ------
+easy_genre_and_energy                         off  -        accepted     accepted     0.86  0    PASS
+study_lofi                                    off  -        accepted     accepted     1.00  0    PASS
+over_constrained_self_corrects                off  -        best_effort  best_effort  0.36  2    PASS
+instrumental_filter_survives_revision         off  -        best_effort  best_effort  0.31  1    PASS
+obscure_instrumental_coding                   off  -        accepted     accepted     0.79  0    PASS
+decade_and_genre                              off  -        best_effort  best_effort  0.54  1    PASS
+mood_only                                     off  -        accepted     accepted     0.65  0    PASS
+veto_is_honoured                              off  -        accepted     accepted     0.65  0    PASS
+contradictory_filters_are_infeasible          off  -        infeasible   infeasible   0.00  0    PASS
+empty_query_rejected                          off  -        rejected     rejected     0.00  0    PASS
+gibberish_rejected                            off  -        rejected     rejected     0.00  0    PASS
+overlong_query_rejected                       off  -        rejected     rejected     0.00  0    PASS
+rag_focus_prefers_instrumental                on   -        accepted     accepted     0.99  0    PASS
+no_rag_focus_admits_a_vocal_track             off  -        accepted     accepted     0.80  0    PASS
+rag_gym_query_targets_high_energy             on   -        accepted     accepted     1.00  0    PASS
+rag_over_constrained_still_self_corrects      on   -        best_effort  best_effort  0.42  1    PASS
+profile_supplies_genres_the_query_omits       on   me       accepted     accepted     1.00  0    PASS
+profile_veto_outranks_a_better_scoring_genre  on   me       accepted     accepted     0.94  0    PASS
+query_overrides_the_profile_veto              on   me       accepted     accepted     1.00  0    PASS
+profile_adds_nepali_and_jpop_vocabulary       on   -        accepted     accepted     1.00  0    PASS
+
+20/20 cases passed | mean confidence 0.62 | 3 guardrail rejection(s)
 ```
 
 Retrieval may only *add* targets the listener did not state, and may never create a hard
 filter — inferring a veto from a similarity score would silently hide songs.
+
+### Personalization: a saved taste profile
+
+`profiles/me.json` holds background taste — favourite genres, usual energy, genres to skip.
+Precedence never varies:
+
+```
+what you typed  >  your saved profile  >  the knowledge corpus
+```
+
+A profile contributes *preferences*, never requirements, so the critic can never fail a
+result for missing something you did not ask for today. The exception is `avoid_genres`,
+which becomes a veto the planner will not concede — and even that yields to the query:
+asking for a genre you normally skip overrides the veto for that run.
+
+The catalog was also extended from 20 to 31 songs with tracks this listener actually plays,
+which added three genres (`hip-hop` entries by Kanye West and Young Thug, `nepali` classics
+by Narayan Gopal, Arun Thapa and Aruna Lama, and `j-pop`/`city pop` from Kenshi Yonezu,
+YOASOBI and Mariya Takeuchi) and two decades (1970s, 1980s). The audio-feature values for
+these added rows are **hand-estimated by ear, not measured** — they are good enough to rank
+with and should not be quoted as data.
+
+**Same query, profile off then on.** Generic, the gym query returns whatever scores highest
+on energy and danceability:
+
+```text
+$ python -m src.agent_cli "something for the gym" -k 3
+Query: "something for the gym"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: energy=0.9, danceability=0.85, tempo_bpm=150.0 | mode vibe_and_energy
+Retrieved: 'Workouts, gym sessions and hype' (use_cases.md, similarity 0.18) -> energy=0.9, danceability=0.85, tempo_bpm=150.0, mode=vibe_and_energy
+
++------+------------+---------------+-------+-------+--------------------------------------+
+| Rank | Song Title | Artist        | Genre | Score | Reasons                              |
++======+============+===============+=======+=======+======================================+
+|    1 | Gym Hero   | Max Pulse     | pop   |  4.98 | Energy proximity: 0.97 (+2.91)       |
+|      |            |               |       |       | Danceability proximity: 0.97 (+1.46) |
+|      |            |               |       |       | Tempo proximity: 0.82 (+0.61)        |
++------+------------+---------------+-------+-------+--------------------------------------+
+|    2 | Drop Zone  | Kilowatt Kids | edm   |  4.95 | Energy proximity: 0.93 (+2.79)       |
+|      |            |               |       |       | Danceability proximity: 0.99 (+1.48) |
+|      |            |               |       |       | Tempo proximity: 0.90 (+0.68)        |
++------+------------+---------------+-------+-------+--------------------------------------+
+|    3 | Idol       | YOASOBI       | j-pop |  4.93 | Energy proximity: 1.00 (+3.0)        |
+|      |            |               |       |       | Danceability proximity: 0.87 (+1.3)  |
+|      |            |               |       |       | Tempo proximity: 0.84 (+0.63)        |
++------+------------+---------------+-------+-------+--------------------------------------+
+... (full output in logs/demo_run.txt)
+```
+
+With the profile applied, EDM is vetoed out despite being the highest-energy genre in the
+catalog, and the listener's own genres take all three slots:
+
+```text
+$ python -m src.agent_cli "something for the gym" --me -k 3
+Profile: Sakxam — genres hip-hop/nepali/j-pop/city pop, usual energy 0.55, likes hits, skips jazz/edm
+Query: "something for the gym"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: energy=0.9, danceability=0.85, tempo_bpm=150.0, genre=hip-hop/nepali/j-pop/city pop, prefers_popular=True | mode vibe_and_energy
+From profile: Sakxam contributed genre=hip-hop/nepali/j-pop/city pop, prefers_popular=True
+Retrieved: 'Workouts, gym sessions and hype' (use_cases.md, similarity 0.18) -> energy=0.9, danceability=0.85, tempo_bpm=150.0, mode=vibe_and_energy
+
++------+-------------+------------+---------+-------+--------------------------------------+
+| Rank | Song Title  | Artist     | Genre   | Score | Reasons                              |
++======+=============+============+=========+=======+======================================+
+|    1 | Idol        | YOASOBI    | j-pop   |  5.91 | Genre match: j-pop (+0.75)           |
+|      |             |            |         |       | Energy proximity: 1.00 (+3.0)        |
+|      |             |            |         |       | Danceability proximity: 0.87 (+1.3)  |
+|      |             |            |         |       | Tempo proximity: 0.84 (+0.63)        |
+|      |             |            |         |       | Popularity bonus: 90 (+0.23)         |
++------+-------------+------------+---------+-------+--------------------------------------+
+|    2 | Stronger    | Kanye West | hip-hop |  5.63 | Genre match: hip-hop (+0.75)         |
+|      |             |            |         |       | Energy proximity: 0.95 (+2.85)       |
+|      |             |            |         |       | Danceability proximity: 0.93 (+1.4)  |
+|      |             |            |         |       | Tempo proximity: 0.54 (+0.41)        |
+|      |             |            |         |       | Popularity bonus: 92 (+0.23)         |
++------+-------------+------------+---------+-------+--------------------------------------+
+... (full output in logs/demo_run.txt)
+```
+
+**The new vocabulary works end to end.** `nepali` did not exist as a word or a genre before:
+
+```text
+$ python -m src.agent_cli "old nepali songs" --me -k 3
+Profile: Sakxam — genres hip-hop/nepali/j-pop/city pop, usual energy 0.55, likes hits, skips jazz/edm
+Query: "old nepali songs"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: acousticness=0.7, energy=0.55, instrumentalness=0.05, prefers_popular=True, genre=nepali | mode genre_first
+From profile: Sakxam contributed energy=0.55, prefers_popular=True
+Retrieved: 'nepali in this catalog' (data/songs.csv, similarity 0.37) -> no usable hints
+Retrieved: 'Nepali classics' (genres.md, similarity 0.19) -> acousticness=0.7, energy=0.35, instrumentalness=0.05
+
++------+------------------------+---------------+--------+-------+------------------------------------------------------------+
+| Rank | Song Title             | Artist        | Genre  | Score | Reasons                                                    |
++======+========================+===============+========+=======+============================================================+
+|    1 | Pohor Saal Ko          | Aruna Lama    | nepali |  5.96 | Genre match: nepali (+4.0)                                 |
+|      |                        |               |        |       | Energy proximity: 0.83 (+0.83)                             |
+|      |                        |               |        |       | Acousticness proximity: 1.00 (+0.5)                        |
+|      |                        |               |        |       | Instrumentalness proximity: 0.99 (+0.49)                   |
+|      |                        |               |        |       | Popularity bonus: 52 (+0.13)                               |
++------+------------------------+---------------+--------+-------+------------------------------------------------------------+
+|    2 | Euta Manche Ko Maya Le | Narayan Gopal | nepali |  5.94 | Genre match: nepali (+4.0)                                 |
+|      |                        |               |        |       | Energy proximity: 0.80 (+0.8)                              |
+|      |                        |               |        |       | Acousticness proximity: 0.98 (+0.49)                       |
+... (full output in logs/demo_run.txt)
+```
+
+**And the query still outranks the profile.** Asking for a vetoed genre by name drops the
+veto for that run, which the harness pins as a test case:
+
+```text
+$ python -m src.agent_cli "edm for the gym" --me -k 3
+Profile: Sakxam — genres hip-hop/nepali/j-pop/city pop, usual energy 0.55, likes hits, skips jazz/edm
+Query: "edm for the gym"
+Status: ACCEPTED | confidence 1.00 | 0 revision(s) | 1 pass(es)
+Agent: Every requirement in the query was satisfied on the first attempt.
+Final plan: energy=0.9, danceability=0.8, prefers_popular=True, genre=edm | mode vibe_and_energy
+From profile: Sakxam contributed prefers_popular=True
+From profile: query overrode your usual skip of edm
+Retrieved: 'edm in this catalog' (data/songs.csv, similarity 0.33) -> no usable hints
+Retrieved: 'EDM and synthwave' (genres.md, similarity 0.25) -> energy=0.85, danceability=0.8
+
++------+------------+---------------+-------+-------+--------------------------------------+
+| Rank | Song Title | Artist        | Genre | Score | Reasons                              |
++======+============+===============+=======+=======+======================================+
+|    1 | Drop Zone  | Kilowatt Kids | edm   |  5.14 | Genre match: edm (+0.75)             |
+|      |            |               |       |       | Energy proximity: 0.93 (+2.79)       |
+|      |            |               |       |       | Danceability proximity: 0.94 (+1.41) |
+|      |            |               |       |       | Popularity bonus: 77 (+0.19)         |
++------+------------+---------------+-------+-------+--------------------------------------+
+|    2 | Laser Tide | Pulse Theory  | edm   |  5.13 | Genre match: edm (+0.75)             |
+... (full output in logs/demo_run.txt)
+```
 
 ### Agentic workflow enhancement: committed reasoning traces
 
@@ -558,15 +695,21 @@ three count as revisions.
 ## Testing summary
 
 - **130 automated tests pass**; coverage 89% overall, 90–100% across `src/agent`.
-- **16/16 golden cases pass**, covering all four outcome statuses and both retrieval paths.
+- **20/20 golden cases pass**, covering all four outcome statuses, both retrieval paths and
+  the saved-profile path.
 - **What worked:** the filter/score split fixed the original failure directly — the old
   design drained its preferences to nothing and returned score-0 pop songs for
   `"1990s instrumental hip-hop"`; it now keeps the instrumental filter and explains the
   trade-off. No-op detection cut wasted passes.
-- **What did not work at first:** three bugs the tests caught. "pop" matched inside
+- **What did not work at first:** five bugs caught by tests and by reading real output. "pop" matched inside
   "popular". The zero-match guardrail was tuned at 0.50 and fired on legitimately weak but
   non-empty matches. Ranking-mode history was read from the plan's notes, which omitted the
-  starting mode, so the agent re-tried a mode it had already used.
+  starting mode, so the agent re-tried a mode it had already used. After the catalog was
+  personalized, two more surfaced: the retriever answered a gym query with the acoustic
+  passage because the filler word "something" carried high IDF, and the plain voice told me
+  a Kanye track had "little or no singing" — the scorer awards points for being *close to
+  the target*, and a low instrumentalness target makes a vocal track score well, so the
+  wording now follows the song's own value.
 - **What I learned:** most of the agent's quality lives in its concession *policy*, not its
   parsing. The parser was the easy half.
 
@@ -586,8 +729,8 @@ three count as revisions.
 ├── eval/                 # golden cases + evaluation harness
 ├── diagrams/             # architecture.mmd (Mermaid source of record)
 ├── logs/                 # generated evidence: demo_run, eval_run, agent_traces
-├── tests/                # 132 pytest cases
-├── data/songs.csv        # 20-song catalog
+├── tests/                # 148 pytest cases
+├── data/songs.csv        # 31-song catalog
 ├── model_card.md         # limitations, bias, misuse, AI-collaboration reflection
 └── ai_interactions.md    # AI collaboration log + an embedded reasoning trace
 ```

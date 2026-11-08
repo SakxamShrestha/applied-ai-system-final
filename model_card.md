@@ -199,10 +199,18 @@ an agent that owns the preference dictionary a human used to write by hand.
 | Critique | Check the answer against the plan; score confidence | `src/agent/critic.py` |
 | Revise | Concede the cheapest thing that could unblock the critic | `src/agent/planner.py` |
 | Explain | Re-express the scorer's reasons in a chosen voice | `src/agent/voices.py` |
+| Personalize | Carry a saved taste profile into every query, with vetoes the planner will not concede | `src/agent/profile.py` |
 
 One change was made inside the original code: `instrumentalness` and `speechiness` were
 given weights in all three ranking modes. Both columns existed in `data/songs.csv` and
 carried no weight, so no request could act on them.
+
+The catalog also grew from 20 songs to 31, adding tracks the author actually listens to.
+That brought three new genres (`nepali`, `j-pop`, `city pop`), two new decades (1970s,
+1980s) and real artists (Kanye West, Young Thug, Narayan Gopal, Arun Thapa, Aruna Lama,
+Mariya Takeuchi, Kenshi Yonezu, YOASOBI). **The audio-feature values on those 11 rows are
+estimated by ear, not measured.** They are adequate for ranking and must not be cited as
+data about those recordings.
 
 ---
 
@@ -234,6 +242,20 @@ rather than filters. On a real catalog they should be filters.
 requirements satisfied, a 15% penalty per revision and a scaling by the share of the
 original request still honoured. It is useful for ranking one answer against another and
 should not be read as a likelihood of listener satisfaction.
+
+**The saved profile encodes one person's taste as the default.** `profiles/me.json`
+biases every query toward four genres and vetoes two others. That is the point, but it means
+the shipped default is *not* neutral, and a reviewer running `--me` sees this author's taste
+rather than the system's behaviour. Running without `--me` is the neutral path, and the
+README shows both.
+
+**A profile veto removes a genre entirely.** Vetoing `edm` means the highest-energy tracks
+in the catalog can never surface for a workout query, even when nothing better exists. The
+query can override a veto by naming the genre, but a listener who does not know that will
+simply never see those songs — a filter bubble built by request rather than by accident.
+
+**Added catalog rows carry estimated features.** See section 11. Any claim the system makes
+about those 11 songs rests on my ear, not on audio analysis.
 
 **No feedback loop.** There is still no listening history, so the system cannot learn that
 it was wrong. Its self-critique checks only whether it did what it was asked, never whether
@@ -280,6 +302,20 @@ characters, which is not over a 300-character limit.
 request for pop, because "pop" is a substring of "popular". Matching had to move to word
 boundaries.
 
+**Filler words beat real words in the retriever.** A gym query retrieved the *acoustic*
+passage ahead of the workout passage, because "something" appears in the acoustic note and
+TF-IDF treated a word with no meaning as highly distinctive. The stopword list had to grow,
+and the similarity floor went from 0.05 to 0.10 after a *high energy* query pulled in the
+"Chill, relaxed and calm" passage at 0.08 and set an acousticness target that fought the
+request.
+
+**My explanation voice told a confident lie.** Reading real output after personalizing the
+catalog, the plain voice said a Kanye West track had "little or no singing". The scorer
+awards points for being *close to the target*, and the target was a low instrumentalness, so
+a vocal track scored well and the template read that as instrumental. The wording now
+follows the song's own value, not the fact that the aspect scored. Nothing caught this but
+reading the output — every test still passed.
+
 ---
 
 ## 15. Collaboration with AI
@@ -324,11 +360,15 @@ any behaviour look expected.
 
 ```text
 $ python -m pytest -q
-132 passed
+148 passed
 
 $ python eval/run_eval.py
-16/16 cases passed | mean confidence 0.52 | 3 guardrail rejection(s)
+20/20 cases passed | mean confidence 0.62 | 3 guardrail rejection(s)
 ```
+
+The 20 golden cases cover all four outcome statuses, both retrieval paths, and the saved
+profile — including one case that pins the precedence rule: asking for a genre the profile
+vetoes must override the veto for that run.
 
 Coverage: 89% overall; 90–100% on every `src/agent` module. Full table in the README.
 
@@ -349,8 +389,11 @@ would reasonably expect.
 | 8 | `romantic music` | Returns r&b romantic material | **Partial** | Correct songs, but confidence 0.99 with retrieval on (0.65 without) is far too high for a two-word request |
 | 9 | `asdfghjkl qwerty` | Refuses with usable guidance | **Pass** | Lists three example queries |
 | 10 | `chill acoustic 90s...` (no-RAG) | Same honest status without retrieval | **Pass** | Still best effort, different ranking |
+| 11 | `something for the gym` with `--me` | Profile genres win; vetoed edm absent | **Pass** | Idol, Stronger, Best Friend; Drop Zone gone |
+| 12 | `old nepali songs` with `--me` | New genre and vocabulary work end to end | **Pass** | Aruna Lama, Narayan Gopal, Arun Thapa |
+| 13 | `edm for the gym` with `--me` | Query overrides the profile veto | **Pass** | Returns edm despite the standing veto |
 
-8 clear passes, 1 conditional, 1 partial. The partial is the open issue, and it is worse
+11 clear passes, 1 conditional, 1 partial. The partial is the open issue, and it is worse
 than it first looked: `"romantic music"` reports 0.99 confidence. Retrieval supplies an
 energy target the listener never gave, the critic then finds every requirement satisfied —
 because there were only two — and nothing in the formula accounts for how little was asked.
@@ -398,3 +441,7 @@ voice can assert something the score does not support, and repeated runs are ide
   currently just my opinions in a markdown file.
 - **Listening feedback**, so the critic can eventually check whether a recommendation was
   good rather than only whether it was compliant.
+- **Measured audio features** for the 11 hand-estimated catalog rows, so the system stops
+  ranking on my guesses about songs I happen to like.
+- **Warn when a profile veto is the reason something is missing**, so a filter bubble the
+  listener built is still visible to them.

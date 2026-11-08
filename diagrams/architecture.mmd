@@ -26,6 +26,7 @@ flowchart TD
     end
     Q --> IDX
     IDX -->|"hint directives -> soft targets only<br/>src/agent/hints.py"| P
+    PROF["profiles/me.json<br/>saved taste: genres · energy · vetoes<br/>src/agent/profile.py"] -->|"background preferences;<br/>the query always wins"| P
 
     OUT["AgentResult<br/>status · top-k · reasons · confidence · passes"] --> VOICE["EXPLAIN<br/>src/agent/voices.py<br/>plain | dj | critic"]
     VOICE --> UI["ASCII table (CLI)<br/>dataframe (Streamlit)"]
@@ -35,9 +36,9 @@ flowchart TD
     AGENT -.->|"every pass"| TR["src/agent/trace.py<br/>logs/agent_traces.md"]
 
     subgraph EVAL["Checking — automated and human"]
-        GS["eval/golden_queries.json<br/>12 cases, expected behaviour"] --> H["eval/run_eval.py<br/>pass/fail · mean confidence"]
+        GS["eval/golden_queries.json<br/>20 cases, expected behaviour"] --> H["eval/run_eval.py<br/>pass/fail · mean confidence"]
         H --> REP["logs/eval_run.txt<br/>pasted into README.md"]
-        TESTS["tests/ — 129 pytest cases"] --> REP
+        TESTS["tests/ — 148 pytest cases"] --> REP
         HUM["Human review table<br/>model_card.md"] --> REP
     end
     OUT -.-> H

@@ -19,13 +19,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.agent.hints import make_enricher  # noqa: E402
 from src.agent.knowledge import build_index  # noqa: E402
+from src.agent.profile import load_profile, make_profile_enricher  # noqa: E402
 from src.agent.loop import run_agent  # noqa: E402
 from src.agent.types import AgentResult  # noqa: E402
 from src.main import SONGS_CSV  # noqa: E402
 from src.recommender import load_songs  # noqa: E402
 
 DEFAULT_CASES = PROJECT_ROOT / "eval" / "golden_queries.json"
-COLUMNS = ("Case", "RAG", "Status", "Expected", "Conf", "Rev", "Result")
+COLUMNS = ("Case", "RAG", "Profile", "Status", "Expected", "Conf", "Rev", "Result")
 # Retrieval is on by default, matching src/agent_cli.py. Cases that test the bare
 # loop set "use_rag": false explicitly.
 DEFAULT_USE_RAG = True
@@ -95,7 +96,13 @@ def evaluate_case(
 ) -> Tuple[AgentResult, Tuple[str, ...]]:
     """Run one golden case and return its result plus any failure reasons."""
     use_rag = case.get("use_rag", DEFAULT_USE_RAG)
-    result = run_agent(case["query"], songs, enrich=enrich if use_rag else None)
+    index = enrich.index if use_rag and hasattr(enrich, "index") else None
+    profile_path = case.get("profile")
+    if profile_path:
+        hook = make_profile_enricher(load_profile(profile_path), index)
+    else:
+        hook = enrich if use_rag else None
+    result = run_agent(case["query"], songs, enrich=hook)
     failures: List[str] = []
     for check in CHECKS:
         failures.extend(check(case, result))
@@ -122,6 +129,7 @@ def _row(case: Dict, result: AgentResult, failures: Sequence[str]) -> Tuple[str,
     return (
         case["name"],
         "on" if case.get("use_rag", DEFAULT_USE_RAG) else "off",
+        Path(case["profile"]).stem if case.get("profile") else "-",
         result.status,
         str(case.get("expect_status", "-")),
         f"{result.confidence:.2f}",
@@ -144,7 +152,9 @@ def _render_table(rows: Sequence[Sequence[str]]) -> str:
 def run_suite(cases: Sequence[Dict], songs: Sequence[Dict], verbose: bool = False) -> int:
     """Print the report and return the number of failing cases."""
     rows, details, confidences = [], [], []
-    enrich = make_enricher(build_index(songs))
+    index = build_index(songs)
+    enrich = make_enricher(index)
+    enrich.index = index  # so per-case profile hooks can reuse the same index
     for case in cases:
         result, failures = evaluate_case(case, songs, enrich=enrich)
         rows.append(_row(case, result, failures))
@@ -162,7 +172,7 @@ def run_suite(cases: Sequence[Dict], songs: Sequence[Dict], verbose: bool = Fals
     print(
         f"\n{len(cases) - failed}/{len(cases)} cases passed | "
         f"mean confidence {mean_confidence:.2f} | "
-        f"{sum(1 for row in rows if row[2] == 'rejected')} guardrail rejection(s)"
+        f"{sum(1 for row in rows if row[3] == 'rejected')} guardrail rejection(s)"
     )
     for name, reasons in details:
         for reason in reasons:

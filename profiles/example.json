@@ -1,0 +1,10 @@
+{
+  "name": "Example Listener",
+  "favorite_genres": ["lofi", "acoustic"],
+  "avoid_genres": ["edm"],
+  "favorite_moods": ["chill"],
+  "favorite_decades": ["2010s", "2020s"],
+  "typical_energy": 0.35,
+  "likes_popular": false,
+  "notes": "Copy this file to profiles/me.json and edit it. Every field is optional. Genres, moods and decades must exist in data/songs.csv to match anything; the loader warns you if they do not."
+}

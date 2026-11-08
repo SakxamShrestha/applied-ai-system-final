@@ -17,6 +17,10 @@ VOICES = (VOICE_PLAIN, VOICE_DJ, VOICE_CRITIC)
 HIGH_ENERGY = 0.7
 LOW_ENERGY = 0.4
 STRONG_SCORE = 4.5
+# Above this a song really is instrumental; below it the song is vocal-led, and saying
+# "little or no singing" about a rap track would be plainly wrong.
+INSTRUMENTAL_THRESHOLD = 0.5
+SPEECHY_THRESHOLD = 0.15
 
 # Reason label -> short aspect key, read back from score_song()'s own reason text.
 ASPECT_LABELS = {
@@ -41,8 +45,14 @@ PLAIN_FRAGMENTS = {
     "energy": "the energy is close to your target",
     "danceability": "it is about as danceable as you wanted",
     "acousticness": "the acoustic balance fits",
-    "instrumentalness": "there is little or no singing",
-    "speechiness": "the amount of spoken word fits",
+    "instrumentalness": {
+        "high": "there is little or no singing",
+        "low": "it is vocal-led, the way you wanted",
+    },
+    "speechiness": {
+        "high": "there is plenty of rapping or spoken word",
+        "low": "it is sung rather than spoken",
+    },
     "tempo": "the tempo is near your target",
     "popularity": "it is a well known track",
 }
@@ -54,8 +64,8 @@ DJ_FRAGMENTS = {
     "energy": "the energy lands right where you wanted it",
     "danceability": "it moves",
     "acousticness": "warm and acoustic",
-    "instrumentalness": "no vocals in your way",
-    "speechiness": "the voice-to-beat balance is right",
+    "instrumentalness": {"high": "no vocals in your way", "low": "and the vocal is the hook"},
+    "speechiness": {"high": "bars on bars", "low": "all melody, no bars"},
     "tempo": "the tempo is on the money",
     "popularity": "and you already know this one",
 }
@@ -104,6 +114,29 @@ def aspects(reason_text: str) -> Tuple[str, ...]:
     return tuple(found)
 
 
+# Aspects whose wording must follow the song's own value, not just the fact that it
+# scored: the scorer awards points for being *close to the target*, which for a low
+# target means the song is vocal-led.
+CONDITIONAL_ASPECTS = {
+    "instrumentalness": INSTRUMENTAL_THRESHOLD,
+    "speechiness": SPEECHY_THRESHOLD,
+}
+
+
+def _choose(template, aspect: str, song: Dict) -> str:
+    """Pick the wording that matches the song, for aspects with two readings."""
+    if not isinstance(template, dict):
+        return template
+    threshold = CONDITIONAL_ASPECTS.get(aspect)
+    if threshold is None:
+        return template.get("high", "")
+    try:
+        value = float(song.get(aspect, 0.0))
+    except (TypeError, ValueError):
+        return template.get("high", "")
+    return template["high"] if value >= threshold else template["low"]
+
+
 def _fill(template: str, song: Dict) -> str:
     try:
         return template.format(**song)
@@ -114,7 +147,9 @@ def _fill(template: str, song: Dict) -> str:
 
 
 def _fragments(song: Dict, found: Sequence[str], table: Dict[str, str]) -> List[str]:
-    rendered = [_fill(table[aspect], song) for aspect in found if aspect in table]
+    rendered = [
+        _fill(_choose(table[aspect], aspect, song), song) for aspect in found if aspect in table
+    ]
     return [item for item in rendered if item]
 
 

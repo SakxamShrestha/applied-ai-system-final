@@ -1,0 +1,8 @@
+{
+  "name": "Sakxam",
+  "favorite_genres": ["hip-hop", "nepali", "j-pop", "city pop"],
+  "avoid_genres": ["jazz", "edm"],
+  "typical_energy": 0.55,
+  "likes_popular": true,
+  "notes": "Kanye and Young Thug for hip-hop, old Nepali classics (Narayan Gopal, Arun Thapa, Aruna Lama), and Japanese music from 80s city pop through modern J-pop. Mid energy by default; hits over deep cuts."
+}

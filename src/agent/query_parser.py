@@ -31,6 +31,10 @@ GENRE_WORDS = {
     "r&b": "r&b", "rnb": "r&b", "randb": "r&b",
     "acoustic": "acoustic", "ambient": "ambient", "synthwave": "synthwave",
     "synth wave": "synthwave", "retrowave": "synthwave",
+    # Added for this listener's own catalog entries.
+    "nepali": "nepali", "nepalese": "nepali", "nepal": "nepali",
+    "j-pop": "j-pop", "jpop": "j-pop", "japanese": "j-pop", "japan": "j-pop",
+    "city pop": "city pop", "citypop": "city pop",
 }
 MOOD_WORDS = {
     "chill": "chill", "chilled": "chill", "happy": "happy", "upbeat": "happy",
@@ -48,6 +52,8 @@ MOOD_TAG_WORDS = {
 }
 DECADE_WORDS = {
     "60s": "1960s", "1960s": "1960s", "sixties": "1960s",
+    "70s": "1970s", "1970s": "1970s", "seventies": "1970s",
+    "80s": "1980s", "1980s": "1980s", "eighties": "1980s",
     "90s": "1990s", "1990s": "1990s", "nineties": "1990s",
     "2000s": "2000s", "00s": "2000s",
     "2010s": "2010s", "10s": "2010s",

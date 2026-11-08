@@ -150,6 +150,43 @@
         "pop"
       ],
       "surrendered_contains": "mood = chill"
+    },
+    {
+      "name": "profile_supplies_genres_the_query_omits",
+      "query": "something for the gym",
+      "profile": "profiles/me.json",
+      "expect_status": "accepted",
+      "forbidden_genres": [
+        "edm",
+        "jazz"
+      ],
+      "min_confidence": 0.8,
+      "max_revisions": 0
+    },
+    {
+      "name": "profile_veto_outranks_a_better_scoring_genre",
+      "query": "high energy music for a workout",
+      "profile": "profiles/me.json",
+      "expect_status": "accepted",
+      "forbidden_genres": [
+        "edm",
+        "jazz"
+      ]
+    },
+    {
+      "name": "query_overrides_the_profile_veto",
+      "query": "edm for the gym",
+      "profile": "profiles/me.json",
+      "expect_status": "accepted",
+      "top_genre": "edm"
+    },
+    {
+      "name": "profile_adds_nepali_and_jpop_vocabulary",
+      "query": "old nepali songs",
+      "use_rag": true,
+      "expect_status": "accepted",
+      "top_genre": "nepali",
+      "min_confidence": 0.5
     }
   ]
 }
